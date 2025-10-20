@@ -7,7 +7,7 @@
 *.dll
 *.so
 *.dylib
-
+.idea
 # Test binary, built with `go test -c`
 *.test
 
@@ -22,11 +22,16 @@ profile.cov
 
 # Go workspace file
 go.work
+go.sum
 go.work.sum
 
 # env file
 .env
-
+docker_compose.yml
+*/bruno.json
 # Editor/IDE
 # .idea/
 # .vscode/
+/internal/adapter/web/server/keys/*
+/ring/
+app
