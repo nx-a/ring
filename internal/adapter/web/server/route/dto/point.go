@@ -2,7 +2,7 @@ package dto
 
 type Point struct {
 	PointId    uint64 `json:"pointId"`
-	BacketId   uint64 `json:"backetId"`
-	ExternalId string `json:"externalId"`
+	BucketId   uint64 `json:"bucket"`
+	ExternalId string `json:"ext"`
 	TimeZone   string `json:"timeZone"`
 }

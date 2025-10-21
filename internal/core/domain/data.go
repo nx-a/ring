@@ -9,6 +9,7 @@ type Data struct {
 	Ext     string
 	PointId uint64
 	Bucket  string
-	Time    time.Time
+	Time    *time.Time
+	Level   string
 	Val     []byte
 }

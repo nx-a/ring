@@ -52,7 +52,7 @@ func Bucket(s *server.Server, service ports.BucketService) {
 			s.Error(w, http.StatusBadRequest, map[string]any{"error": "id not found"})
 			return
 		}
-		_buckets, err := service.GetByControl(control["ControlId"].(uint64))
+		_buckets, err := service.GetByControl(conv.ToUint(control["ControlId"]))
 		if err != nil || _buckets == nil || len(_buckets) == 0 {
 			s.Write(w, []any{})
 			return

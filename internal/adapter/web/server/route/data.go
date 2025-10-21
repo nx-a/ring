@@ -12,14 +12,18 @@ import (
 func Data(s *server.Server, ds ports.DataService) {
 	s.Mux().HandleFunc("POST /data", func(w http.ResponseWriter, r *http.Request) {
 		_dto := conv.Parse[dto.Data](w, r)
-		if _dto == nil || _dto.Ext == "" {
+		if _dto == nil {
+			return
+		}
+		if _dto.Ext == "" {
 			s.Error(w, http.StatusInternalServerError, map[string]any{"error": "data not found"})
 			return
 		}
 		ds.Write(r.Context(), domain.Data{
-			Ext:  _dto.Ext,
-			Time: _dto.Time,
-			Val:  _dto.Data,
+			Ext:   _dto.Ext,
+			Time:  _dto.Time,
+			Level: _dto.Level,
+			Val:   _dto.Data,
 		})
 
 		/*

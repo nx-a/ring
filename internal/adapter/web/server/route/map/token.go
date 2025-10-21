@@ -12,7 +12,6 @@ func TokenToDomain(token *dto.Token) *domain.Token {
 	return &domain.Token{
 		TokenId:  token.TokenId,
 		BucketId: token.BucketId,
-		Bucket:   token.Bucket,
 		Type:     token.Type,
 		Val:      token.Val,
 	}
@@ -24,7 +23,6 @@ func TokenFromDomain(token *domain.Token) *dto.Token {
 	return &dto.Token{
 		TokenId:  token.TokenId,
 		BucketId: token.BucketId,
-		Bucket:   token.Bucket,
 		Type:     token.Type,
 		Val:      token.Val,
 	}

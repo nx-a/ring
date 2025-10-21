@@ -32,17 +32,18 @@ func (d *Data) Add(data []domain.Data) error {
 	if data == nil {
 		return fmt.Errorf("data is nil")
 	}
-	buckets := make(map[string][]domain.Data, len(data))
+	buckets := make(map[string][]domain.Data, 4)
 	for _, l := range data {
 		if buckets[l.Bucket] == nil {
 			buckets[l.Bucket] = make([]domain.Data, 0, 1024)
 		}
 		buckets[l.Bucket] = append(buckets[l.Bucket], l)
 	}
-	cols := []string{"data_id", "point_id", "time", "val"}
+	cols := []string{"data_id", "point_id", "time", "level", "val"}
 	var err error = nil
+	log.Debug(buckets)
 	for bucket, data := range buckets {
-		_, err = d.pool.CopyFrom(nil, pgx.Identifier{"data_" + bucket}, cols,
+		_, err = d.pool.CopyFrom(context.Background(), pgx.Identifier{"data_" + bucket}, cols,
 			pgx.CopyFromSlice(len(data), func(i int) ([]interface{}, error) {
 				return []any{data[i].DataId, data[i].PointId, data[i].Time, data[i].Val}, nil
 			}))
@@ -87,7 +88,7 @@ func (d *Data) Create(bucket string) {
 	log.Debug(val)
 	if val == 0 {
 		log.Info("Creating table ", bucket)
-		sql := fmt.Sprintf("create table %s (data_id char(36) primary key, point_id bigint, time timestamp, val jsonb)", "data_"+bucket)
+		sql := fmt.Sprintf("create table %s (data_id char(36) primary key, point_id bigint, time timestamp, level varchar(10), val jsonb)", "data_"+bucket)
 		exec, err := d.pool.Exec(context.Background(), sql)
 		if err != nil {
 			log.Error(err)

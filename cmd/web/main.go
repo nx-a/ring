@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"fmt"
 	"github.com/nx-a/ring/cmd/migrate"
 	"github.com/nx-a/ring/internal/adapter/storage"
 	bucketstor "github.com/nx-a/ring/internal/adapter/storage/bucket"
@@ -23,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 )
 
@@ -48,10 +50,24 @@ func main() {
 	}
 }
 
+var ignoreDir = "/home/nx/project/go/ring/"
+
 func dependency() (*server.Server, []engine.Closable) {
 	_event := event.New()
 	cfg := env.New(config)
 	log.SetLevel(log.DebugLevel)
+	log.SetReportCaller(true)
+	log.SetFormatter(&log.TextFormatter{
+		ForceColors:               true,
+		EnvironmentOverrideColors: true,
+		FullTimestamp:             true,
+		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			filename := f.File[len(ignoreDir):]
+
+			return "", fmt.Sprintf(" %s:%d", filename, f.Line)
+		},
+	})
+	fmt.Println(os.Getwd())
 	log.Debug(cfg.Get("service.prod"))
 	if cfg.Get("service.prod") == "false" {
 		err := migrate.Run(cfg)

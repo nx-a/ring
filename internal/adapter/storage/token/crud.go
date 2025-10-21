@@ -18,10 +18,10 @@ type Token struct {
 func New(pool *pgxpool.Pool) *Token {
 	return &Token{pool: pool,
 		crud: storage.NewCrud[domain.Token, uint64](scan, pool,
-			"select token_id, backet_id, type, val from token where token_id = $1",
-			"select token_id, backet_id, type, val from token where point_id in ($1)",
-			"insert into token (backet_id, type, val) values ($1, $2, $3) RETURNING token_id",
-			"update token set backet_id = $2, type = $3, val = $4 where token_id = $1",
+			"select token_id, bucket_id, type, value from token where token_id = $1",
+			"select token_id, bucket_id, type, value from token where point_id in ($1)",
+			"insert into token (bucket_id, type, value) values ($1, $2, $3) RETURNING token_id",
+			"update token set bucket_id = $2, type = $3, value = $4 where token_id = $1",
 			"delete from token where token_id = $1",
 		)}
 }
@@ -51,7 +51,7 @@ func (b *Token) Remove(id uint64) {
 	log.Info(rows)
 }
 func (b *Token) GetByToken(val string) (domain.Token, error) {
-	rows, err := b.pool.Query(context.Background(), "SELECT token_id, backet_id, type, val FROM token WHERE val = $1", val)
+	rows, err := b.pool.Query(context.Background(), "SELECT token_id, bucket_id, type, value FROM token WHERE value = $1", val)
 	if err != nil {
 		log.Error(err)
 		return domain.Token{}, nil
@@ -67,7 +67,7 @@ func (b *Token) GetByToken(val string) (domain.Token, error) {
 	return elements[0], nil
 }
 func (b *Token) GetByBucketId(id uint64) []domain.Token {
-	rows, err := b.pool.Query(context.Background(), "SELECT token_id, backet_id, type, val FROM token WHERE backet_id = $1", id)
+	rows, err := b.pool.Query(context.Background(), "SELECT token_id, bucket_id, type, value FROM token WHERE bucket_id = $1", id)
 	if err != nil {
 		log.Error(err)
 		return nil

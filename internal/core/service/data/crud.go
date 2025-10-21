@@ -6,9 +6,11 @@ import (
 	"github.com/nx-a/ring/internal/core/domain"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/core/service/bucket"
+	"github.com/nx-a/ring/internal/engine/conv"
 	"github.com/nx-a/ring/internal/engine/event"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,10 +31,10 @@ func New(stor ports.DataStorage, bucketService *bucket.Service, ps ports.PointSe
 		ch:      make(chan domain.Data, 1024),
 		history: make([]domain.Data, 0, 1024),
 	}
-	_, err := data.cron.AddFunc("* * * * * *", func() {
+	_, err := data.cron.AddFunc("1 1 * * * *", func() {
 		go data.Clear()
 	})
-	_, err = data.cron.AddFunc("*/1 * * * * *", func() {
+	_, err = data.cron.AddFunc("* * * * * *", func() {
 		go data.sync()
 	})
 	if err != nil {
@@ -42,6 +44,7 @@ func New(stor ports.DataStorage, bucketService *bucket.Service, ps ports.PointSe
 		log.Debug("on bucket event")
 		data.create(ctx.Value("sysname").(string))
 	})
+	data.cron.Start()
 	go data.load()
 	return data
 }
@@ -54,14 +57,22 @@ func (s *Service) Write(ctx context.Context, data domain.Data) {
 	if !ok {
 		return
 	}
-	pt := s.ps.GetByExternalId(control["bucketId"].(uint64), data.Ext)
+	pt := s.ps.GetByExternalId(conv.ToUint(control["bucketId"]), data.Ext)
 	_uuid, err := uuid.NewV7()
 	if err != nil {
 		_uuid, _ = uuid.NewV7()
 	}
 	data.DataId = _uuid.String()
 	data.PointId = pt.PointId
-	data.Time = time.Now()
+	if data.Level == "" {
+		data.Level = "INFO"
+	} else {
+		data.Level = strings.ToUpper(data.Level)
+	}
+	if data.Time == nil {
+		now := time.Now()
+		data.Time = &now
+	}
 	data.Bucket = _bucket
 	s.add(data)
 }

@@ -11,7 +11,7 @@ func PointToDomain(point *dto.Point) *domain.Point {
 	}
 	return &domain.Point{
 		PointId:    point.PointId,
-		BacketId:   point.BacketId,
+		BucketId:   point.BucketId,
 		ExternalId: point.ExternalId,
 		TimeZone:   point.TimeZone,
 	}
