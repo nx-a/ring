@@ -11,5 +11,5 @@ FROM alpine:latest
 WORKDIR /opt/ring
 
 COPY --from=builder /app/app .
-EXPOSE 80
+EXPOSE 80 7888
 CMD ["./app"]

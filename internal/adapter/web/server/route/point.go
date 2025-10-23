@@ -32,8 +32,16 @@ func Point(s *server.Server, ps ports.PointService) {
 		}
 		_dto := conv.Parse[dto.Point](w, r)
 		_point := _map.PointToDomain(_dto)
-		if _point == nil || strings.TrimSpace(_point.ExternalId) == "" {
-			s.Error(w, http.StatusInternalServerError, map[string]any{"error": "create error"})
+		if _point == nil {
+			s.Error(w, http.StatusBadRequest, map[string]any{"error": "point is empty"})
+		}
+		_point.ExternalId = strings.TrimSpace(_point.ExternalId)
+		if _point.ExternalId == "" {
+			s.Error(w, http.StatusBadRequest, map[string]any{"error": "ext is empty"})
+			return
+		}
+		if _point.BucketId == 0 {
+			s.Error(w, http.StatusBadRequest, map[string]any{"error": "bucket is required"})
 			return
 		}
 		_point.ExternalId = strings.TrimSpace(_point.ExternalId)

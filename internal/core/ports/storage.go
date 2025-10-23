@@ -15,6 +15,7 @@ type PointStorage interface {
 	Storage[domain.Point, uint64]
 	GetByBacketId(id uint64) []domain.Point
 	GetByExternalId(ids []uint64, ext string) *domain.Point
+	GetByExternalIds(bucketId uint64, ext []string) []domain.Point
 }
 type DataStorage interface {
 	Add([]domain.Data) error

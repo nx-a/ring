@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func Parse[T any](w http.ResponseWriter, r *http.Request) *T {
@@ -157,4 +158,50 @@ func ToBool(el interface{}) bool {
 	default:
 		return false
 	}
+}
+func FirstQuery[T any](lst []string) *T {
+	if lst == nil {
+		return nil
+	}
+	var result T
+	value := lst[0]
+	switch any(result).(type) {
+	case string:
+		return any(&value).(*T)
+	case int:
+		val := ToInt(value)
+		return any(&val).(*T)
+	case uint64:
+		val := ToUint(value)
+		return any(&val).(*T)
+	case time.Time:
+		t1, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return nil
+		}
+		return any(&t1).(*T)
+	}
+	return nil
+
+}
+func FirstEl[T any](lst []any) *T {
+	if lst == nil {
+		return nil
+	}
+	var result T
+	value := lst[0]
+	switch v := value.(type) {
+	case T:
+		return &v
+	case string:
+		switch any(result).(type) {
+		case time.Time:
+			t1, err := time.Parse(time.RFC3339, "2023-12-25T15:04:05Z")
+			if err != nil {
+				return nil
+			}
+			return any(&t1).(*T)
+		}
+	}
+	return nil
 }

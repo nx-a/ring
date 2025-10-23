@@ -6,6 +6,6 @@ import (
 )
 
 type DataService interface {
-	Write(ctx context.Context, data domain.Data)
+	Write(ctx context.Context, data domain.Data) error
 	Clear()
 }

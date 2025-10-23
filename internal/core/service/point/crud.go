@@ -56,6 +56,42 @@ func (s *Service) GetByBacketId(controlId uint64, backetId uint64) []domain.Poin
 	}
 	return s.stor.GetByBacketId(backetId)
 }
+func (s *Service) GetByExternalIds(backetId uint64, extId []string) []domain.Point {
+	finds := make([]domain.Point, len(extId))
+	not := make([]string, 0, len(extId))
+	s.rw.RLock()
+	if _, ok := s.cache[backetId]; !ok {
+		s.rw.RUnlock()
+		points := s.stor.GetByExternalIds(backetId, extId)
+		s.rw.Lock()
+		s.cache[backetId] = make(map[string]*domain.Point)
+		for _, point := range points {
+			s.cache[backetId][point.ExternalId] = &point
+		}
+		s.rw.Unlock()
+		return points
+	}
+	for _, _extId := range extId {
+		if pp, ok := s.cache[backetId][_extId]; ok {
+			finds = append(finds, *pp)
+		} else {
+			not = append(not, _extId)
+		}
+	}
+	s.rw.RUnlock()
+	if len(not) > 0 {
+		points := s.stor.GetByExternalIds(backetId, extId)
+		if len(points) > 0 {
+			s.rw.Lock()
+			for _, point := range points {
+				s.cache[backetId][point.ExternalId] = &point
+				finds = append(finds, point)
+			}
+			s.rw.Unlock()
+		}
+	}
+	return finds
+}
 func (s *Service) GetByExternalId(backetId uint64, extId string) domain.Point {
 	s.rw.RLock()
 	if s.cache[backetId] != nil && s.cache[backetId][extId] != nil {

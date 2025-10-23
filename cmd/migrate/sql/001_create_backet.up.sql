@@ -9,5 +9,5 @@ create table if not exists public.bucket
     time_zone   varchar(128)
 );
 
-create unique index if not exists bucket_system_name_uindex
+create index if not exists bucket_system_name_index
     on public.bucket (system_name);

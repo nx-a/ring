@@ -11,6 +11,7 @@ import (
 	datastor "github.com/nx-a/ring/internal/adapter/storage/data"
 	pointstor "github.com/nx-a/ring/internal/adapter/storage/point"
 	tokenstor "github.com/nx-a/ring/internal/adapter/storage/token"
+	tcp2 "github.com/nx-a/ring/internal/adapter/tcp"
 	"github.com/nx-a/ring/internal/adapter/web/server"
 	"github.com/nx-a/ring/internal/adapter/web/server/route"
 	"github.com/nx-a/ring/internal/core/service/bucket"
@@ -34,7 +35,12 @@ var config embed.FS
 func main() {
 	ws, closes := dependency()
 	ctx, cancel := context.WithCancel(context.Background())
-	ws.Listen(ctx, cancel)
+	go ws.Listen(ctx, cancel)
+	tcp, err := tcp2.NewServer(":7888")
+	if err != nil {
+		log.Fatal(err)
+	}
+	go tcp.Run(ctx)
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {

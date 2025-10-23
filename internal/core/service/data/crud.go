@@ -2,8 +2,10 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/nx-a/ring/internal/core/domain"
+	"github.com/nx-a/ring/internal/core/dto"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/core/service/bucket"
 	"github.com/nx-a/ring/internal/engine/conv"
@@ -48,16 +50,42 @@ func New(stor ports.DataStorage, bucketService *bucket.Service, ps ports.PointSe
 	go data.load()
 	return data
 }
-func (s *Service) Write(ctx context.Context, data domain.Data) {
+func (s *Service) Find(ctx context.Context, data *dto.DataSelect) ([]domain.Data, error) {
 	control, ok := ctx.Value("control").(map[string]any)
 	if !ok {
-		return
+		return nil, fmt.Errorf("not correct token")
+	}
+	if _controlId, ok := control["ControlId"]; ok {
+		return s.dataFind(conv.ToUint(_controlId), data)
+	}
+
+	if data.Ext != nil && len(data.Ext) > 0 {
+		pt := s.ps.GetByExternalIds(conv.ToUint(control["bucketId"]), data.Ext)
+		ids := make([]uint64, 0, len(pt))
+		for _, p := range pt {
+			ids = append(ids, p.PointId)
+		}
+		data.Points = ids
+	}
+	//s.stor.Find(data)
+	return nil, nil
+}
+func (s *Service) dataFind(controlId uint64, data *dto.DataSelect) ([]domain.Data, error) {
+	return nil, nil
+}
+func (s *Service) Write(ctx context.Context, data domain.Data) error {
+	control, ok := ctx.Value("control").(map[string]any)
+	if !ok {
+		return fmt.Errorf("not correct token")
 	}
 	_bucket, ok := control["bucket"].(string)
 	if !ok {
-		return
+		return fmt.Errorf("not correct bucket")
 	}
 	pt := s.ps.GetByExternalId(conv.ToUint(control["bucketId"]), data.Ext)
+	if pt.PointId == 0 {
+		return fmt.Errorf("point not found by external " + data.Ext)
+	}
 	_uuid, err := uuid.NewV7()
 	if err != nil {
 		_uuid, _ = uuid.NewV7()
@@ -75,6 +103,7 @@ func (s *Service) Write(ctx context.Context, data domain.Data) {
 	}
 	data.Bucket = _bucket
 	s.add(data)
+	return nil
 }
 func (s *Service) add(data domain.Data) {
 	s.ch <- data

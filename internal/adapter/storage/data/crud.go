@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nx-a/ring/internal/core/domain"
+	"github.com/nx-a/ring/internal/core/dto"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -45,7 +46,7 @@ func (d *Data) Add(data []domain.Data) error {
 	for bucket, data := range buckets {
 		_, err = d.pool.CopyFrom(context.Background(), pgx.Identifier{"data_" + bucket}, cols,
 			pgx.CopyFromSlice(len(data), func(i int) ([]interface{}, error) {
-				return []any{data[i].DataId, data[i].PointId, data[i].Time, data[i].Val}, nil
+				return []any{data[i].DataId, data[i].PointId, data[i].Time, data[i].Level, data[i].Val}, nil
 			}))
 		if err != nil {
 			log.Error(err)
@@ -68,7 +69,10 @@ func (d *Data) Clear(backet string, of time.Time) {
 		log.Error(err)
 	}
 }
-
+func (d *Data) Find(data *dto.DataSelect) []domain.Data {
+	//rows, err := d.pool.Query(context.Background(), "SELECT * FROM data_"+backet+" WHERE time between $1 and $2", from, to)
+	return nil
+}
 func (d *Data) Select(backet string, from time.Time, to time.Time) []domain.Data {
 	rows, err := d.pool.Query(context.Background(), "SELECT * FROM data_"+backet+" WHERE time between $1 and $2", from, to)
 	if err != nil {

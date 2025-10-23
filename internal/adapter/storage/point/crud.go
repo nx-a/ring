@@ -83,3 +83,17 @@ func (b *Point) GetByExternalId(ids []uint64, ext string) *domain.Point {
 	}
 	return nil
 }
+func (b *Point) GetByExternalIds(bucketId uint64, ext []string) []domain.Point {
+	rows, err := b.pool.Query(context.Background(), "select point_id, bucket_id, external_id, time_zone from point where bucket_id = $1 and external_id =any($2)", bucketId, ext)
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
+	defer rows.Close()
+	elements, err := pgx.CollectRows(rows, scan)
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
+	return elements
+}
