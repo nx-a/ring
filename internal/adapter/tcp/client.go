@@ -99,19 +99,20 @@ func (c *Client) IsClosed() bool {
 	return c.isClosed
 }
 func (c *Client) HandleMessage(message string) {
-	fmt.Printf("Received from %s: %s", c.conn.RemoteAddr(), message)
+	addr := c.conn.RemoteAddr()
+	fmt.Printf("Received from %s", addr)
 	rawJson, err := base64.StdEncoding.DecodeString(message)
 	if err != nil {
-		log.Infof("Client %s: decode message failed: %v", c.conn.RemoteAddr(), err)
+		log.Infof("Client %s: decode message failed: %v", addr, err)
 	}
 	var entry hook.LogEntry
 	err = json.Unmarshal(rawJson, &entry)
 	if err != nil {
-		log.Infof("Client %s: decode message failed: %v", c.conn.RemoteAddr(), err)
+		log.Infof("Client %s: decode message failed: %v", addr, err)
 	}
 	claim, err := c.tokenService.GetByToken(entry.Token)
 	if err != nil {
-		log.Infof("Client %s: get token failed: %v", c.conn.RemoteAddr(), err)
+		log.Infof("Client %s: get token failed: %v", addr, err)
 	}
 	_time, err := time.Parse(time.RFC3339, entry.Timestamp)
 	if err != nil {
@@ -128,8 +129,8 @@ func (c *Client) HandleMessage(message string) {
 		Level: entry.Level,
 		Val:   val,
 	})
-	if err := c.SendMessage("done\n"); err != nil {
-		log.Printf("Heartbeat failed for %s: %v", c.conn.RemoteAddr(), err)
+	if err = c.SendMessage("done\n"); err != nil {
+		log.Printf("Heartbeat failed for %s: %v", addr, err)
 		c.Close()
 	}
 }

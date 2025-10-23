@@ -55,6 +55,7 @@ func (c *RingClient) processQueue() {
 		for {
 			select {
 			case <-c.done:
+				fmt.Println("client is stopped")
 				return
 			default:
 			}

@@ -42,7 +42,6 @@ func (d *Data) Add(data []domain.Data) error {
 	}
 	cols := []string{"data_id", "point_id", "time", "level", "val"}
 	var err error = nil
-	log.Debug(buckets)
 	for bucket, data := range buckets {
 		_, err = d.pool.CopyFrom(context.Background(), pgx.Identifier{"data_" + bucket}, cols,
 			pgx.CopyFromSlice(len(data), func(i int) ([]interface{}, error) {

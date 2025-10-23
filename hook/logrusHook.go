@@ -6,6 +6,7 @@ import (
 	"github.com/nx-a/ring/client"
 	"github.com/sirupsen/logrus"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -28,9 +29,22 @@ type LogEntry struct {
 	Token     string                 `json:"token"`
 	Fields    map[string]interface{} `json:"fields,omitempty"`
 }
+type RingParams struct {
+	Address   string
+	Token     string
+	AppName   string
+	IgnoreDir string
+}
 
-func NewRingHook(address, token, appName string, levels []logrus.Level) (*RingHook, error) {
-	_client := client.New(address, 5*time.Second)
+func NewRingHook(params RingParams) (*RingHook, error) {
+	logrus.SetReportCaller(true)
+	formatter := &logrus.JSONFormatter{CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+		filename := f.File[len(params.IgnoreDir):]
+		return "", fmt.Sprintf(" %s:%d", filename, f.Line)
+	}}
+	logrus.SetFormatter(formatter)
+
+	_client := client.New(params.Address, 5*time.Second)
 
 	hostname, _ := os.Hostname()
 	if hostname == "" {
@@ -40,10 +54,10 @@ func NewRingHook(address, token, appName string, levels []logrus.Level) (*RingHo
 	hook := &RingHook{
 		client:    _client,
 		hostname:  hostname,
-		token:     token,
-		appName:   appName,
-		levels:    levels,
-		formatter: &logrus.JSONFormatter{},
+		token:     params.Token,
+		appName:   params.AppName,
+		levels:    logrus.AllLevels,
+		formatter: formatter,
 	}
 
 	// Запускаем клиент
