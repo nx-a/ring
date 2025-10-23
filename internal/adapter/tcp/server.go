@@ -3,6 +3,7 @@ package tcp
 import (
 	"context"
 	"errors"
+	"github.com/nx-a/ring/internal/core/ports"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"os"
@@ -13,11 +14,13 @@ import (
 )
 
 type Server struct {
-	listener net.Listener
-	clients  map[*Client]bool
-	mutex    sync.RWMutex
-	wg       sync.WaitGroup
-	shutdown chan struct{}
+	listener     net.Listener
+	clients      map[*Client]bool
+	mutex        sync.RWMutex
+	wg           sync.WaitGroup
+	shutdown     chan struct{}
+	dataService  ports.DataService
+	tokenService ports.TokenService
 }
 
 func NewServer(addr string) (*Server, error) {
@@ -53,7 +56,7 @@ func (s *Server) CloseAllClients() {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 
-	client := NewClient(conn)
+	client := NewClient(conn, s.dataService, s.tokenService)
 	s.AddClient(client)
 	defer s.RemoveClient(client)
 
@@ -61,7 +64,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	client.Run()
 
-	log.Infof("Client disconnected: %s (remaining: %d)", conn.RemoteAddr(), len(s.clients))
+	log.Infof("Client disconnected: %s (remaining: %d)", conn.RemoteAddr(), len(s.clients)-1)
 }
 func (s *Server) Run(ctx context.Context) {
 	log.Info("Server started on", s.listener.Addr())
@@ -104,6 +107,11 @@ func (s *Server) handleSignals(ctx context.Context) {
 	<-ctx.Done()
 	s.CloseAllClients()
 	s.listener.Close()
+}
+
+func (s *Server) AddHandler(dataService ports.DataService, tokenService ports.TokenService) {
+	s.dataService = dataService
+	s.tokenService = tokenService
 }
 func isClosedError(err error) bool {
 	return err.Error() == "use of closed network connection"

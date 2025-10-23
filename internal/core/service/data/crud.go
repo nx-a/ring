@@ -73,6 +73,7 @@ func (s *Service) Find(ctx context.Context, data *dto.DataSelect) ([]domain.Data
 func (s *Service) dataFind(controlId uint64, data *dto.DataSelect) ([]domain.Data, error) {
 	return nil, nil
 }
+
 func (s *Service) Write(ctx context.Context, data domain.Data) error {
 	control, ok := ctx.Value("control").(map[string]any)
 	if !ok {

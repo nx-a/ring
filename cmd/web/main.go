@@ -11,7 +11,7 @@ import (
 	datastor "github.com/nx-a/ring/internal/adapter/storage/data"
 	pointstor "github.com/nx-a/ring/internal/adapter/storage/point"
 	tokenstor "github.com/nx-a/ring/internal/adapter/storage/token"
-	tcp2 "github.com/nx-a/ring/internal/adapter/tcp"
+	"github.com/nx-a/ring/internal/adapter/tcp"
 	"github.com/nx-a/ring/internal/adapter/web/server"
 	"github.com/nx-a/ring/internal/adapter/web/server/route"
 	"github.com/nx-a/ring/internal/core/service/bucket"
@@ -33,13 +33,9 @@ import (
 var config embed.FS
 
 func main() {
-	ws, closes := dependency()
+	ws, tcp, closes := dependency()
 	ctx, cancel := context.WithCancel(context.Background())
 	go ws.Listen(ctx, cancel)
-	tcp, err := tcp2.NewServer(":7888")
-	if err != nil {
-		log.Fatal(err)
-	}
 	go tcp.Run(ctx)
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -58,7 +54,7 @@ func main() {
 
 var ignoreDir = "/home/nx/project/go/ring/"
 
-func dependency() (*server.Server, []engine.Closable) {
+func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
 	_event := event.New()
 	cfg := env.New(config)
 	log.SetLevel(log.DebugLevel)
@@ -107,5 +103,11 @@ func dependency() (*server.Server, []engine.Closable) {
 	route.Point(ws, pointService)
 	route.Token(ws, tokenService)
 	route.Data(ws, dataService)
-	return ws, []engine.Closable{db, ws}
+	_tcp, err := tcp.NewServer(":7888")
+	if err != nil {
+		log.Fatal(err)
+	}
+	_tcp.AddHandler(dataService, tokenService)
+
+	return ws, _tcp, []engine.Closable{db, ws}
 }

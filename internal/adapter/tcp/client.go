@@ -2,8 +2,14 @@ package tcp
 
 import (
 	"bufio"
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nx-a/ring/hook"
+	"github.com/nx-a/ring/internal/core/domain"
+	"github.com/nx-a/ring/internal/core/ports"
 	log "github.com/sirupsen/logrus"
 	"net"
 	"sync"
@@ -11,21 +17,25 @@ import (
 )
 
 type Client struct {
-	conn     net.Conn
-	reader   *bufio.Reader
-	writer   *bufio.Writer
-	done     chan bool
-	isClosed bool
-	mutex    sync.RWMutex
+	conn         net.Conn
+	reader       *bufio.Reader
+	writer       *bufio.Writer
+	done         chan bool
+	isClosed     bool
+	mutex        sync.RWMutex
+	dataService  ports.DataService
+	tokenService ports.TokenService
 }
 
-func NewClient(conn net.Conn) *Client {
+func NewClient(conn net.Conn, service ports.DataService, tokenService ports.TokenService) *Client {
 	return &Client{
-		conn:     conn,
-		reader:   bufio.NewReader(conn),
-		writer:   bufio.NewWriter(conn),
-		done:     make(chan bool),
-		isClosed: false,
+		conn:         conn,
+		reader:       bufio.NewReader(conn),
+		writer:       bufio.NewWriter(conn),
+		done:         make(chan bool),
+		isClosed:     false,
+		dataService:  service,
+		tokenService: tokenService,
 	}
 }
 
@@ -90,6 +100,34 @@ func (c *Client) IsClosed() bool {
 }
 func (c *Client) HandleMessage(message string) {
 	fmt.Printf("Received from %s: %s", c.conn.RemoteAddr(), message)
+	rawJson, err := base64.StdEncoding.DecodeString(message)
+	if err != nil {
+		log.Infof("Client %s: decode message failed: %v", c.conn.RemoteAddr(), err)
+	}
+	var entry hook.LogEntry
+	err = json.Unmarshal(rawJson, &entry)
+	if err != nil {
+		log.Infof("Client %s: decode message failed: %v", c.conn.RemoteAddr(), err)
+	}
+	claim, err := c.tokenService.GetByToken(entry.Token)
+	if err != nil {
+		log.Infof("Client %s: get token failed: %v", c.conn.RemoteAddr(), err)
+	}
+	_time, err := time.Parse(time.RFC3339, entry.Timestamp)
+	if err != nil {
+		_time = time.Now()
+	}
+	if entry.Fields == nil {
+		entry.Fields = make(map[string]interface{})
+	}
+	entry.Fields["message"] = entry.Message
+	val, err := json.Marshal(entry.Fields)
+	c.dataService.Write(context.WithValue(context.Background(), "control", claim), domain.Data{
+		Ext:   entry.AppName,
+		Time:  &_time,
+		Level: entry.Level,
+		Val:   val,
+	})
 	if err := c.SendMessage("done\n"); err != nil {
 		log.Printf("Heartbeat failed for %s: %v", c.conn.RemoteAddr(), err)
 		c.Close()
