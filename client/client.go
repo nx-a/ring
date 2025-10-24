@@ -14,7 +14,7 @@ type RingClient struct {
 	queue   chan []byte
 	done    chan struct{}
 	config  *tls.Config
-	dialer  *net.Dialer
+	dialer  *tls.Dialer
 }
 
 func New(address string, config *tls.Config) *RingClient {
@@ -24,8 +24,11 @@ func New(address string, config *tls.Config) *RingClient {
 		timeout: 5 * time.Second,
 		queue:   make(chan []byte, 1000), // Буферизованная очередь
 		done:    make(chan struct{}),
-		dialer: &net.Dialer{
-			KeepAlive: 60 * time.Second,
+		dialer: &tls.Dialer{
+			Config: config,
+			NetDialer: &net.Dialer{
+				KeepAlive: 60 * time.Second,
+			},
 		},
 	}
 }
@@ -50,7 +53,8 @@ func (c *RingClient) Send(data []byte) error {
 	}
 }
 func (c *RingClient) processQueue() {
-	var conn net.Conn
+	var conn *tls.Conn
+	var connNet net.Conn
 	var err error
 
 	reconnect := func() {
@@ -67,13 +71,14 @@ func (c *RingClient) processQueue() {
 			default:
 			}
 
-			conn, err = tls.DialWithDialer(c.dialer, "tcp", c.address, c.config)
+			connNet, err = c.dialer.Dial("tcp", c.address)
+			conn = tls.Client(connNet, c.config)
 			if err == nil {
-				fmt.Printf("Connected to log server %s\n", c.address)
-				err = conn.(*tls.Conn).Handshake()
+				err = conn.Handshake()
 				if err != nil {
-					fmt.Printf("TLS handshake failed: %v", err)
+					fmt.Println("client is stopped", err)
 				}
+				fmt.Printf("Connected to log server %s\n", c.address)
 				break
 			}
 

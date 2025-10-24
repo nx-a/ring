@@ -40,7 +40,7 @@ func main() {
 	ws, q, closes := dependency()
 	ctx, cancel := context.WithCancel(context.Background())
 	go ws.Listen(ctx, cancel)
-	go q.Start(ctx)
+	go q.Run(ctx)
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {

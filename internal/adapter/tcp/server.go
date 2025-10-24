@@ -94,7 +94,6 @@ func (s *Server) Run(ctx context.Context) {
 			log.Info("Server shutting down")
 			return
 		default:
-			s.listener.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
 			conn, err := s.listener.Accept()
 			if err != nil {
 				var netErr net.Error
