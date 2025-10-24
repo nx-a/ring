@@ -100,7 +100,7 @@ func (c *Client) IsClosed() bool {
 }
 func (c *Client) HandleMessage(message string) {
 	addr := c.conn.RemoteAddr()
-	fmt.Printf("Received from %s", addr)
+	fmt.Printf("Received from %s\n", addr)
 	rawJson, err := base64.StdEncoding.DecodeString(message)
 	if err != nil {
 		log.Infof("Client %s: decode message failed: %v", addr, err)

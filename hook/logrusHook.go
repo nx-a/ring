@@ -77,16 +77,16 @@ func (h *RingHook) Fire(entry *logrus.Entry) error {
 func (h *RingHook) sendLog(entry *logrus.Entry) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-
 	// Создаем структуру лога
 	logEntry := LogEntry{
 		Timestamp: entry.Time.Format(time.RFC3339),
 		Level:     entry.Level.String(),
 		Message:   entry.Message,
-		Hostname:  h.hostname,
-		AppName:   h.appName,
-		Token:     h.token,
-		Fields:    make(map[string]interface{}),
+
+		Hostname: h.hostname,
+		AppName:  h.appName,
+		Token:    h.token,
+		Fields:   make(map[string]interface{}),
 	}
 
 	// Добавляем поля
