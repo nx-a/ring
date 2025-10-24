@@ -80,6 +80,10 @@ func (c *Client) reconnect() {
 	}
 }
 func (c *Client) Start() error {
+	err := c.Connect()
+	if err != nil {
+		return err
+	}
 	go c.processQueue()
 	return nil
 }
