@@ -100,6 +100,9 @@ func (c *Client) HandleMessage(message string) {
 		entry.Fields = make(map[string]interface{})
 	}
 	entry.Fields["message"] = entry.Message
+	if len(entry.File) > 0 {
+		entry.Fields["file"] = entry.File
+	}
 	val, err := json.Marshal(entry.Fields)
 	c.dataService.Write(context.WithValue(context.Background(), "control", claim), domain.Data{
 		Ext:   entry.AppName,

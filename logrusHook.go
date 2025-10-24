@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -38,6 +37,7 @@ type Params struct {
 }
 
 func NewHook(params Params) (*Hook, error) {
+	logrus.SetReportCaller(true)
 	_client := NewClient(params.Address, &tls.Config{
 		InsecureSkipVerify: true,
 	})
@@ -72,12 +72,16 @@ func (h *Hook) Fire(entry *logrus.Entry) error {
 }
 func (h *Hook) sendLog(entry *logrus.Entry) {
 	h.mu.Lock()
+	file := ""
+	if entry.Caller != nil {
+		file = fmt.Sprintf("%s:%d", entry.Caller.File, entry.Caller.Line)[len(h.ignoreDir):]
+	}
 	// Создаем структуру лога
 	logEntry := LogEntry{
 		Timestamp: entry.Time.Format(time.RFC3339),
 		Level:     entry.Level.String(),
 		Message:   entry.Message,
-		File:      entry.Caller.File + ":" + strconv.Itoa(entry.Caller.Line),
+		File:      file,
 		Hostname:  h.hostname,
 		AppName:   h.appName,
 		Token:     h.token,
