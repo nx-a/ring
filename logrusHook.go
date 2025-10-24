@@ -1,24 +1,23 @@
-package hook
+package ring
 
 import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/nx-a/ring/client"
 	"github.com/sirupsen/logrus"
 	"os"
-	"runtime"
+	"strconv"
 	"sync"
 	"time"
 )
 
-type RingHook struct {
-	client    *client.RingClient
+type Hook struct {
+	client    *Client
 	hostname  string
 	token     string
 	appName   string
+	ignoreDir string
 	levels    []logrus.Level
-	formatter logrus.Formatter
 	mu        sync.Mutex
 }
 type LogEntry struct {
@@ -28,24 +27,18 @@ type LogEntry struct {
 	Hostname  string                 `json:"hostname"`
 	AppName   string                 `json:"app_name"`
 	Token     string                 `json:"token"`
+	File      string                 `json:"file"`
 	Fields    map[string]interface{} `json:"fields,omitempty"`
 }
-type RingParams struct {
+type Params struct {
 	Address   string
 	Token     string
 	AppName   string
 	IgnoreDir string
 }
 
-func NewRingHook(params RingParams) (*RingHook, error) {
-	logrus.SetReportCaller(true)
-	formatter := &logrus.JSONFormatter{CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-		filename := f.File[len(params.IgnoreDir):]
-		return "", fmt.Sprintf(" %s:%d", filename, f.Line)
-	}}
-	logrus.SetFormatter(formatter)
-
-	_client := client.New(params.Address, &tls.Config{
+func NewHook(params Params) (*Hook, error) {
+	_client := NewClient(params.Address, &tls.Config{
 		InsecureSkipVerify: true,
 	})
 
@@ -54,13 +47,13 @@ func NewRingHook(params RingParams) (*RingHook, error) {
 		hostname = "unknown"
 	}
 
-	hook := &RingHook{
+	hook := &Hook{
 		client:    _client,
 		hostname:  hostname,
 		token:     params.Token,
 		appName:   params.AppName,
+		ignoreDir: params.IgnoreDir,
 		levels:    logrus.AllLevels,
-		formatter: formatter,
 	}
 
 	// Запускаем клиент
@@ -70,32 +63,32 @@ func NewRingHook(params RingParams) (*RingHook, error) {
 
 	return hook, nil
 }
-func (h *RingHook) Levels() []logrus.Level {
+func (h *Hook) Levels() []logrus.Level {
 	return h.levels
 }
-func (h *RingHook) Fire(entry *logrus.Entry) error {
+func (h *Hook) Fire(entry *logrus.Entry) error {
 	go h.sendLog(entry)
 	return nil
 }
-func (h *RingHook) sendLog(entry *logrus.Entry) {
+func (h *Hook) sendLog(entry *logrus.Entry) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	// Создаем структуру лога
 	logEntry := LogEntry{
 		Timestamp: entry.Time.Format(time.RFC3339),
 		Level:     entry.Level.String(),
 		Message:   entry.Message,
-
-		Hostname: h.hostname,
-		AppName:  h.appName,
-		Token:    h.token,
-		Fields:   make(map[string]interface{}),
+		File:      entry.Caller.File + ":" + strconv.Itoa(entry.Caller.Line),
+		Hostname:  h.hostname,
+		AppName:   h.appName,
+		Token:     h.token,
+		Fields:    make(map[string]interface{}),
 	}
 
 	// Добавляем поля
 	for key, value := range entry.Data {
 		logEntry.Fields[key] = value
 	}
+	h.mu.Unlock()
 
 	// Сериализуем в JSON
 	data, err := json.Marshal(logEntry)
@@ -109,6 +102,6 @@ func (h *RingHook) sendLog(entry *logrus.Entry) {
 		fmt.Printf("Failed to send log: %v\n", err)
 	}
 }
-func (h *RingHook) Close() {
+func (h *Hook) Close() {
 	h.client.Stop()
 }

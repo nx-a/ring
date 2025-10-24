@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/nx-a/ring/hook"
+	"github.com/nx-a/ring"
 	"github.com/nx-a/ring/internal/core/domain"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/quic-go/quic-go"
@@ -102,7 +102,7 @@ func (s *QUICServer) processMessage(message string) string {
 	if err != nil {
 		log.Infof("Decode message failed: %v", err)
 	}
-	var entry hook.LogEntry
+	var entry ring.LogEntry
 	err = json.Unmarshal(rawJson, &entry)
 	if err != nil {
 		log.Infof("Decode message failed: %v", err)

@@ -37,10 +37,10 @@ var config embed.FS
 var tlsDir embed.FS
 
 func main() {
-	ws, q, closes := dependency()
+	ws, srv, closes := dependency()
 	ctx, cancel := context.WithCancel(context.Background())
 	go ws.Listen(ctx, cancel)
-	go q.Run(ctx)
+	go srv.Run(ctx)
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
@@ -136,6 +136,5 @@ func loadTLSConfigFromFiles(certFile, keyFile string) (*tls.Config, error) {
 
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		NextProtos:   []string{"ring-quic"},
 	}, nil
 }

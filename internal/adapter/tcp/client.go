@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nx-a/ring/hook"
+	"github.com/nx-a/ring"
 	"github.com/nx-a/ring/internal/core/domain"
 	"github.com/nx-a/ring/internal/core/ports"
 	log "github.com/sirupsen/logrus"
@@ -40,32 +40,10 @@ func NewClient(conn net.Conn, service ports.DataService, tokenService ports.Toke
 }
 
 func (c *Client) Run() {
-	// Запускаем heartbeat
-	go c.Heartbeat()
-
 	// Основной цикл чтения
 	c.ReadLoop()
 }
-func (c *Client) Heartbeat() {
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			if c.IsClosed() {
-				return
-			}
-			if err := c.SendMessage("check\n"); err != nil {
-				log.Infof("Heartbeat failed for %s: %v", c.conn.RemoteAddr(), err)
-				c.Close()
-				return
-			}
-		case <-c.done:
-			return
-		}
-	}
-}
 func (c *Client) ReadLoop() {
 	defer c.Close()
 
@@ -100,12 +78,12 @@ func (c *Client) IsClosed() bool {
 }
 func (c *Client) HandleMessage(message string) {
 	addr := c.conn.RemoteAddr()
-	fmt.Printf("Received from %s\n", addr)
+	fmt.Printf("Received from %s handle message: %s\n", addr, message)
 	rawJson, err := base64.StdEncoding.DecodeString(message)
 	if err != nil {
 		log.Infof("Client %s: decode message failed: %v", addr, err)
 	}
-	var entry hook.LogEntry
+	var entry ring.LogEntry
 	err = json.Unmarshal(rawJson, &entry)
 	if err != nil {
 		log.Infof("Client %s: decode message failed: %v", addr, err)

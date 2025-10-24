@@ -58,7 +58,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if ok {
 		// Выполняем handshake
 		if err := tlsConn.Handshake(); err != nil {
-			log.Printf("TLS handshake failed: %v", err)
+			log.Printf("Ошибка handshake: %v", err)
 			return
 		}
 
