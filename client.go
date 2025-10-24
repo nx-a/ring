@@ -57,7 +57,7 @@ func (c *Client) connectionMonitor() {
 			return
 		}
 
-		if _, err := c.SendRequest([]byte("check")); err != nil {
+		if _, err := c.SendRequest([]byte("")); err != nil {
 			log.Printf("Connection lost: %v", err)
 			c.isConnected = false
 
@@ -110,9 +110,12 @@ func (c *Client) processQueue() {
 				c.reconnect()
 			}
 			if conn != nil {
-				c.SendRequest(data)
+				done, err := c.SendRequest(data)
+				if err != nil {
+					log.Printf("Connection lost: %v", err)
+				}
+				log.Printf(done)
 			}
-
 		}
 	}
 }
