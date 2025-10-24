@@ -2,14 +2,12 @@ package tcp
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"github.com/nx-a/ring/internal/core/ports"
 	log "github.com/sirupsen/logrus"
 	"net"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -23,8 +21,8 @@ type Server struct {
 	tokenService ports.TokenService
 }
 
-func NewServer(addr string) (*Server, error) {
-	listener, err := net.Listen("tcp", addr)
+func NewServer(addr string, cfg *tls.Config) (*Server, error) {
+	listener, err := tls.Listen("tcp", addr, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +54,24 @@ func (s *Server) CloseAllClients() {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 
+	tlsConn, ok := conn.(*tls.Conn)
+	if ok {
+		// Выполняем handshake
+		if err := tlsConn.Handshake(); err != nil {
+			log.Printf("TLS handshake failed: %v", err)
+			return
+		}
+
+		state := tlsConn.ConnectionState()
+		log.Printf("New TLS connection from %s, Version: %x, CipherSuite: %x",
+			conn.RemoteAddr(), state.Version, state.CipherSuite)
+
+		if len(state.PeerCertificates) > 0 {
+			cert := state.PeerCertificates[0]
+			log.Printf("Client certificate: %s", cert.Subject.CommonName)
+		}
+	}
+
 	client := NewClient(conn, s.dataService, s.tokenService)
 	s.AddClient(client)
 	defer s.RemoveClient(client)
@@ -68,33 +84,36 @@ func (s *Server) handleConnection(conn net.Conn) {
 }
 func (s *Server) Run(ctx context.Context) {
 	log.Info("Server started on", s.listener.Addr())
-	go s.handleSignals(ctx)
 
 	for {
-		s.listener.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
-		conn, err := s.listener.Accept()
-		if err != nil {
-			var netErr net.Error
-			if errors.As(err, &netErr) && netErr.Timeout() {
+		select {
+		case <-ctx.Done():
+			log.Info("Server shutting down")
+			return
+		case <-s.shutdown:
+			log.Info("Server shutting down")
+			return
+		default:
+			s.listener.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
+			conn, err := s.listener.Accept()
+			if err != nil {
+				var netErr net.Error
+				if errors.As(err, &netErr) && netErr.Timeout() {
+					continue
+				}
+				if !isClosedError(err) {
+					log.Errorf("Accept error: %v", err)
+				}
 				continue
 			}
-			if !isClosedError(err) {
-				log.Errorf("Accept error: %v", err)
-			}
-			continue
-		}
 
-		s.wg.Add(1)
-		go s.handleConnection(conn)
+			s.wg.Add(1)
+			go s.handleConnection(conn)
+		}
 	}
 }
-func (s *Server) handleSignals(ctx context.Context) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	<-ctx.Done()
+func (s *Server) Close() error {
 	close(s.shutdown)
-
 	// Даем время на завершение активных соединений
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -107,6 +126,7 @@ func (s *Server) handleSignals(ctx context.Context) {
 	<-ctx.Done()
 	s.CloseAllClients()
 	s.listener.Close()
+	return nil
 }
 
 func (s *Server) AddHandler(dataService ports.DataService, tokenService ports.TokenService) {

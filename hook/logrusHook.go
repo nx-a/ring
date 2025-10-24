@@ -1,9 +1,10 @@
 package hook
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/nx-a/ring"
+	"github.com/nx-a/ring/client"
 	"github.com/sirupsen/logrus"
 	"os"
 	"runtime"
@@ -12,7 +13,7 @@ import (
 )
 
 type RingHook struct {
-	client    *ring.Client
+	client    *client.RingClient
 	hostname  string
 	token     string
 	appName   string
@@ -44,7 +45,9 @@ func NewRingHook(params RingParams) (*RingHook, error) {
 	}}
 	logrus.SetFormatter(formatter)
 
-	_client := ring.New(params.Address)
+	_client := client.New(params.Address, &tls.Config{
+		InsecureSkipVerify: true,
+	})
 
 	hostname, _ := os.Hostname()
 	if hostname == "" {

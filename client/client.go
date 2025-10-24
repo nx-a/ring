@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -12,14 +13,20 @@ type RingClient struct {
 	timeout time.Duration
 	queue   chan []byte
 	done    chan struct{}
+	config  *tls.Config
+	dialer  *net.Dialer
 }
 
-func New(address string, timeout time.Duration) *RingClient {
+func New(address string, config *tls.Config) *RingClient {
 	return &RingClient{
 		address: address,
-		timeout: timeout,
+		config:  config,
+		timeout: 5 * time.Second,
 		queue:   make(chan []byte, 1000), // Буферизованная очередь
 		done:    make(chan struct{}),
+		dialer: &net.Dialer{
+			KeepAlive: 60 * time.Second,
+		},
 	}
 }
 func (c *RingClient) Start() error {
@@ -60,9 +67,13 @@ func (c *RingClient) processQueue() {
 			default:
 			}
 
-			conn, err = net.DialTimeout("tcp", c.address, c.timeout)
+			conn, err = tls.DialWithDialer(c.dialer, "tcp", c.address, c.config)
 			if err == nil {
 				fmt.Printf("Connected to log server %s\n", c.address)
+				err = conn.(*tls.Conn).Handshake()
+				if err != nil {
+					fmt.Printf("TLS handshake failed: %v", err)
+				}
 				break
 			}
 
