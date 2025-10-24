@@ -3,7 +3,7 @@ package hook
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/nx-a/ring/client"
+	"github.com/nx-a/ring"
 	"github.com/sirupsen/logrus"
 	"os"
 	"runtime"
@@ -12,7 +12,7 @@ import (
 )
 
 type RingHook struct {
-	client    *client.RingClient
+	client    *ring.Client
 	hostname  string
 	token     string
 	appName   string
@@ -44,7 +44,7 @@ func NewRingHook(params RingParams) (*RingHook, error) {
 	}}
 	logrus.SetFormatter(formatter)
 
-	_client := client.New(params.Address, 5*time.Second)
+	_client := ring.New(params.Address)
 
 	hostname, _ := os.Hostname()
 	if hostname == "" {

@@ -2,16 +2,17 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"embed"
 	"fmt"
 	"github.com/nx-a/ring/cmd/migrate"
+	"github.com/nx-a/ring/internal/adapter/quicSrv"
 	"github.com/nx-a/ring/internal/adapter/storage"
 	bucketstor "github.com/nx-a/ring/internal/adapter/storage/bucket"
 	controlstor "github.com/nx-a/ring/internal/adapter/storage/control"
 	datastor "github.com/nx-a/ring/internal/adapter/storage/data"
 	pointstor "github.com/nx-a/ring/internal/adapter/storage/point"
 	tokenstor "github.com/nx-a/ring/internal/adapter/storage/token"
-	"github.com/nx-a/ring/internal/adapter/tcp"
 	"github.com/nx-a/ring/internal/adapter/web/server"
 	"github.com/nx-a/ring/internal/adapter/web/server/route"
 	"github.com/nx-a/ring/internal/core/service/bucket"
@@ -22,21 +23,26 @@ import (
 	"github.com/nx-a/ring/internal/engine"
 	"github.com/nx-a/ring/internal/engine/env"
 	"github.com/nx-a/ring/internal/engine/event"
+	"github.com/quic-go/quic-go"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 )
 
 //go:embed config.yml
 var config embed.FS
 
+//go:embed tls/*
+var tlsDir embed.FS
+
 func main() {
-	ws, tcp, closes := dependency()
+	ws, q, closes := dependency()
 	ctx, cancel := context.WithCancel(context.Background())
 	go ws.Listen(ctx, cancel)
-	go tcp.Run(ctx)
+	go q.Start(ctx)
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
@@ -54,7 +60,7 @@ func main() {
 
 var ignoreDir = "/home/nx/project/go/ring/"
 
-func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
+func dependency() (*server.Server, *quicSrv.QUICServer, []engine.Closable) {
 	_event := event.New()
 	cfg := env.New(config)
 	log.SetLevel(log.DebugLevel)
@@ -103,11 +109,39 @@ func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
 	route.Point(ws, pointService)
 	route.Token(ws, tokenService)
 	route.Data(ws, dataService)
-	_tcp, err := tcp.NewServer(":7888")
+	tlsConfig, err := loadTLSConfigFromFiles("tls/server.crt", "tls/server.key")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to load TLS files: %v", err)
 	}
-	_tcp.AddHandler(dataService, tokenService)
+	quicConfig := &quic.Config{
+		EnableDatagrams:    true,
+		MaxIncomingStreams: 1000,
+		KeepAlivePeriod:    15 * time.Second,
+		MaxIdleTimeout:     30 * time.Second,
+	}
+	srv, err := quicSrv.New(":7888", tlsConfig, quicConfig, dataService, tokenService)
+	if err != nil {
+		log.Fatalf("Failed to create QUIC server: %v", err)
+	}
+	return ws, srv, []engine.Closable{db, ws, srv}
+}
+func loadTLSConfigFromFiles(certFile, keyFile string) (*tls.Config, error) {
+	certData, err := tlsDir.ReadFile(certFile)
+	if err != nil {
+		return nil, err
+	}
 
-	return ws, _tcp, []engine.Closable{db, ws}
+	// Read key file
+	keyData, err := tlsDir.ReadFile(keyFile)
+	if err != nil {
+		return nil, err
+	}
+	cert, err := tls.X509KeyPair(certData, keyData)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}, nil
 }

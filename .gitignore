@@ -35,3 +35,4 @@ docker_compose.yml
 /internal/adapter/web/server/keys/*
 /ring/
 app
+/cmd/web/tls/*
