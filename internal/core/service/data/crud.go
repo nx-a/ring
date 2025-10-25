@@ -67,11 +67,28 @@ func (s *Service) Find(ctx context.Context, data *dto.DataSelect) ([]domain.Data
 		}
 		data.Points = ids
 	}
-	//s.stor.Find(data)
-	return nil, nil
+	data.Bucket = control["bucket"].(string)
+	return s.stor.Find(data), nil
 }
 func (s *Service) dataFind(controlId uint64, data *dto.DataSelect) ([]domain.Data, error) {
-	return nil, nil
+	if data.Bucket == "" {
+		return nil, fmt.Errorf("bucket is required")
+	}
+	buckets, err := s.bucketService.GetByControl(controlId)
+	if err != nil {
+		return nil, err
+	}
+	find := false
+	for _, _bucket := range buckets {
+		if _bucket.SystemName == data.Bucket {
+			find = true
+			break
+		}
+	}
+	if !find {
+		return nil, fmt.Errorf("not found bucket")
+	}
+	return s.stor.Find(data), nil
 }
 
 func (s *Service) Write(ctx context.Context, data domain.Data) error {

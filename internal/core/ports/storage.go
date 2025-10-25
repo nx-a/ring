@@ -2,6 +2,7 @@ package ports
 
 import (
 	"github.com/nx-a/ring/internal/core/domain"
+	"github.com/nx-a/ring/internal/core/dto"
 	"time"
 )
 
@@ -22,6 +23,7 @@ type DataStorage interface {
 	Clear(backet string, of time.Time)
 	Select(backet string, from time.Time, to time.Time) []domain.Data
 	Create(bucket string)
+	Find(data *dto.DataSelect) []domain.Data
 }
 type TokenStorage interface {
 	Storage[domain.Token, uint64]

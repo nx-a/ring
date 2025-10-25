@@ -18,4 +18,5 @@ type DataSelect struct {
 	TimeEnd   *time.Time `json:"timeEnd"`
 	Level     []string   `json:"level"`
 	Data      []string   `json:"data"`
+	Bucket    string     `json:"bucket"`
 }

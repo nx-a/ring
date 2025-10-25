@@ -8,6 +8,7 @@ import (
 	"github.com/nx-a/ring/internal/core/domain"
 	"github.com/nx-a/ring/internal/core/dto"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"sync"
 	"time"
 )
@@ -69,8 +70,41 @@ func (d *Data) Clear(backet string, of time.Time) {
 	}
 }
 func (d *Data) Find(data *dto.DataSelect) []domain.Data {
-	//rows, err := d.pool.Query(context.Background(), "SELECT * FROM data_"+backet+" WHERE time between $1 and $2", from, to)
-	return nil
+	where := make([]string, 0, 5)
+	ww := make([]any, 0, 5)
+	if data.TimeStart != nil {
+		where = append(where, "time >= $1")
+		ww = append(ww, data.TimeStart)
+	}
+	if data.TimeEnd != nil {
+		where = append(where, fmt.Sprintf("time <= $%n", len(ww)+1))
+		ww = append(ww, data.TimeEnd)
+	}
+	if data.Level != nil && len(data.Level) > 0 {
+		where = append(where, fmt.Sprintf("level =ANY($%n)", len(ww)+1))
+		ww = append(ww, data.Level)
+	}
+	if data.Points != nil && len(data.Points) > 0 {
+		where = append(where, fmt.Sprintf("point_id =ANY($%n)", len(ww)+1))
+		ww = append(ww, data.Points)
+	}
+	if data.Data != nil && len(data.Data) > 0 {
+		where = append(where, fmt.Sprintf("val ->>ANY($%n)", len(ww)+1))
+		ww = append(ww, data.Data)
+	}
+	_select := fmt.Sprintf("SELECT * FROM data_%s WHERE %s", data.Bucket, strings.Join(where, " and "))
+	log.Debug(_select)
+	rows, err := d.pool.Query(context.Background(), _select, ww...)
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
+	defer rows.Close()
+	elements, err := pgx.CollectRows(rows, scan)
+	if err != nil {
+		log.Error(err)
+	}
+	return elements
 }
 func (d *Data) Select(backet string, from time.Time, to time.Time) []domain.Data {
 	rows, err := d.pool.Query(context.Background(), "SELECT * FROM data_"+backet+" WHERE time between $1 and $2", from, to)

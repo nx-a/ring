@@ -6,7 +6,6 @@ import (
 	"github.com/nx-a/ring/internal/core/dto"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/engine/conv"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 )
@@ -41,8 +40,14 @@ func Data(s *server.Server, ds ports.DataService) {
 			TimeEnd:   conv.FirstQuery[time.Time](q["timeEnd"]),
 			Level:     q["level"],
 			Data:      q["data"],
+			Bucket:    *conv.FirstQuery[string](q["bucket"]),
 		}
-		log.Info(_dtoFind)
+		resp, err := ds.Find(r.Context(), &_dtoFind)
+		if err != nil {
+			s.Error(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		s.Write(w, resp)
 		//ds.Write()
 
 	})
