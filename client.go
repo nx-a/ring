@@ -1,6 +1,8 @@
 package ring
 
 import (
+	"bytes"
+	"compress/zlib"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -32,8 +34,21 @@ func (c *Client) Stop() {
 	close(c.done)
 }
 func (c *Client) Send(data []byte) error {
-	buf := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
-	base64.StdEncoding.Encode(buf, data)
+	var bufData bytes.Buffer
+	writer, err := zlib.NewWriterLevel(&bufData, zlib.DefaultCompression)
+	if err != nil {
+		return err
+	}
+	_, err = writer.Write(data)
+	if err != nil {
+		return err
+	}
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+	buf := make([]byte, base64.StdEncoding.EncodedLen(bufData.Len()))
+	base64.StdEncoding.Encode(bufData.Bytes(), data)
 	buf = append(buf, '\n')
 	select {
 	case c.queue <- buf:

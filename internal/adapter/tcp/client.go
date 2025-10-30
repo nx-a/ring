@@ -2,6 +2,8 @@ package tcp
 
 import (
 	"bufio"
+	"bytes"
+	"compress/zlib"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -11,6 +13,7 @@ import (
 	"github.com/nx-a/ring/internal/core/domain"
 	"github.com/nx-a/ring/internal/core/ports"
 	log "github.com/sirupsen/logrus"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -83,8 +86,18 @@ func (c *Client) HandleMessage(message string) {
 	if err != nil {
 		log.Infof("Client %s: decode message failed: %v", addr, err)
 	}
+	reader, err := zlib.NewReader(bytes.NewReader(rawJson))
+	if err != nil {
+		log.Infof("Client %s: decode message failed: %v", addr, err)
+	}
+	var bufData bytes.Buffer
+	_, err = io.Copy(&bufData, reader)
+	if err != nil {
+		log.Infof("Client %s: decode message failed: %v", addr, err)
+	}
+	reader.Close()
 	var entry ring.LogEntry
-	err = json.Unmarshal(rawJson, &entry)
+	err = json.Unmarshal(bufData.Bytes(), &entry)
 	if err != nil {
 		log.Infof("Client %s: decode message failed: %v", addr, err)
 	}

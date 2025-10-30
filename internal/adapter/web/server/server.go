@@ -36,7 +36,8 @@ func New(cfg Config, services *Services) *Server {
 		Addr:         ":" + cfg.Get("server.port"),
 		Handler:      def(auth(mux, services.TokenService)),
 		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		WriteTimeout: 1 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 	return &Server{
 		srv:      &srv,

@@ -10,7 +10,6 @@ require (
 	github.com/jackc/pgx-logrus v0.0.0-20220919124836-b099d8ce75da
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/lib/pq v1.10.9
-	github.com/quic-go/quic-go v0.55.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
 	gopkg.in/yaml.v3 v3.0.1
