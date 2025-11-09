@@ -65,7 +65,10 @@ func (c *Client) processQueue() {
 
 	reconnect := func() {
 		if conn != nil {
-			conn.Close()
+			err = conn.Close()
+			if err != nil {
+				fmt.Println("Error closing TLS connection: ", err.Error())
+			}
 			conn = nil
 		}
 
@@ -92,7 +95,10 @@ func (c *Client) processQueue() {
 		select {
 		case <-c.done:
 			if conn != nil {
-				conn.Close()
+				err = conn.Close()
+				if err != nil {
+					fmt.Println("Error closing TLS connection: ", err.Error())
+				}
 			}
 			return
 
@@ -101,17 +107,25 @@ func (c *Client) processQueue() {
 				reconnect()
 			}
 
-			// Пытаемся отправить данные
 			if conn != nil {
-				conn.SetWriteDeadline(time.Now().Add(c.timeout))
+				err = conn.SetWriteDeadline(time.Now().Add(c.timeout))
+				if err != nil {
+					fmt.Println("Error setting write deadline: ", err.Error())
+				}
+
 				_, err := conn.Write(data)
 				if err != nil {
 					fmt.Printf("Failed to send log: %v, reconnecting...\n", err)
 					reconnect()
-					// Пытаемся отправить снова после реконнекта
 					if conn != nil {
-						conn.SetWriteDeadline(time.Now().Add(c.timeout))
-						conn.Write(data)
+						err = conn.SetWriteDeadline(time.Now().Add(c.timeout))
+						if err != nil {
+							fmt.Println("Error setting write deadline: ", err.Error())
+						}
+						_, err := conn.Write(data)
+						if err != nil {
+							fmt.Printf("Failed to send log: %v, reconnecting...\n", err)
+						}
 					}
 				}
 			}

@@ -24,13 +24,19 @@ func Run(cfg Config) error {
 	if err != nil {
 		return err
 	}
-	log.Info(cfg.Get("database.dsn"))
-	//	m, err := migrate.NewWithDatabaseInstance("iofs", d, cfg.Get("database.dsn"))
 	m, err := migrate.NewWithSourceInstance("iofs", d, cfg.Get("database.dsn"))
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer func() {
+		sourceErr, databaseErr := m.Close()
+		if sourceErr != nil {
+			log.Error(sourceErr)
+		}
+		if databaseErr != nil {
+			log.Error(databaseErr)
+		}
+	}()
 	err = m.Up()
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err

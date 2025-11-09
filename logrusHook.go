@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"os"
-	"sync"
+	"path/filepath"
 	"time"
 )
 
@@ -17,7 +17,6 @@ type Hook struct {
 	appName   string
 	ignoreDir string
 	levels    []logrus.Level
-	mu        sync.Mutex
 }
 type LogEntry struct {
 	Timestamp string                 `json:"timestamp"`
@@ -36,6 +35,9 @@ type Params struct {
 	IgnoreDir string
 }
 
+// NewHook Инициализация logrus hook
+//
+//lint:ignore U1000 Эта функция используется другими пакетами
 func NewHook(params Params) (*Hook, error) {
 	logrus.SetReportCaller(true)
 	_client := NewClient(params.Address, &tls.Config{
@@ -45,6 +47,9 @@ func NewHook(params Params) (*Hook, error) {
 	hostname, _ := os.Hostname()
 	if hostname == "" {
 		hostname = "unknown"
+	}
+	if params.IgnoreDir == "" {
+		params.IgnoreDir = findProjectRoot()
 	}
 
 	hook := &Hook{
@@ -63,21 +68,41 @@ func NewHook(params Params) (*Hook, error) {
 
 	return hook, nil
 }
+
+func findProjectRoot() string {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(currentDir, "go.mod")); err == nil {
+			return currentDir
+		}
+
+		parentDir := filepath.Dir(currentDir)
+		if parentDir == currentDir {
+			break
+		}
+		currentDir = parentDir
+	}
+	return ""
+}
+
 func (h *Hook) Levels() []logrus.Level {
 	return h.levels
 }
 func (h *Hook) Fire(entry *logrus.Entry) error {
-	go h.sendLog(entry)
+	h.sendLog(entry)
 	return nil
 }
 func (h *Hook) sendLog(entry *logrus.Entry) {
-	h.mu.Lock()
 	file := ""
 	if entry.Caller != nil {
 		file = fmt.Sprintf("%s:%d", entry.Caller.File, entry.Caller.Line)[len(h.ignoreDir):]
 	}
-	// Создаем структуру лога
-	logEntry := LogEntry{
+	// Сериализуем в JSON
+	data, err := json.Marshal(LogEntry{
 		Timestamp: entry.Time.Format(time.RFC3339),
 		Level:     entry.Level.String(),
 		Message:   entry.Message,
@@ -85,17 +110,8 @@ func (h *Hook) sendLog(entry *logrus.Entry) {
 		Hostname:  h.hostname,
 		AppName:   h.appName,
 		Token:     h.token,
-		Fields:    make(map[string]interface{}),
-	}
-
-	// Добавляем поля
-	for key, value := range entry.Data {
-		logEntry.Fields[key] = value
-	}
-	h.mu.Unlock()
-
-	// Сериализуем в JSON
-	data, err := json.Marshal(logEntry)
+		Fields:    entry.Data,
+	})
 	if err != nil {
 		fmt.Printf("Failed to marshal log entry: %v\n", err)
 		return
