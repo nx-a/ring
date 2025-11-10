@@ -30,6 +30,7 @@ func (c *Control) Registration(control domain.Control) (domain.Control, error) {
 	}
 	var id uint64
 	control.Password = password(control.Password)
+	log.Debug(control.Password)
 	err = c.pool.QueryRow(context.Background(), "insert into control (login, password) values ($1, $2) RETURNING control_id", control.Login, control.Password).Scan(&id)
 	if err != nil {
 		log.Error(err)

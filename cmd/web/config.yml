@@ -1,8 +1,8 @@
 server:
-  port: ${SERVER_PORT:9080}
+  port: ${SERVER_PORT:7092}
   static: ./static
 service:
   name: ${SERVICE_NAME:ring}
   prod: ${PROD:false}
 database:
-  dsn: ${DATABASE_DSN:postgres://postgres:MRJ0i4vz9RvR@localhost:5432/ring?sslmode=disable&application_name=ring}
+  dsn: ${DATABASE_DSN:postgres://postgres:p0proxima@postgres:5432/ring?sslmode=disable&application_name=ring}

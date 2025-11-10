@@ -6,6 +6,7 @@ import (
 	"github.com/nx-a/ring/internal/adapter/web/server"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/engine/conv"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -44,12 +45,14 @@ func Control(s *server.Server, service ports.ControlService) {
 		if auth == nil {
 			return
 		}
+		log.Info(auth)
 		_control, err := service.Reg(auth.Login, auth.Password)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte(err.Error()))
 			return
 		}
+		log.Info(_control)
 		w.WriteHeader(http.StatusOK)
 		token, err := server.NewJwt(structs.Map(_control))
 		if err != nil {

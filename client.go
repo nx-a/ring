@@ -47,8 +47,8 @@ func (c *Client) Send(data []byte) error {
 	if err != nil {
 		return err
 	}
-	buf := make([]byte, base64.StdEncoding.EncodedLen(bufData.Len()))
-	base64.StdEncoding.Encode(bufData.Bytes(), data)
+	buf := make([]byte, base64.StdEncoding.EncodedLen(bufData.Len())+1)
+	base64.StdEncoding.Encode(bufData.Bytes(), buf)
 	buf = append(buf, '\n')
 	select {
 	case c.queue <- buf:
