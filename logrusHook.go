@@ -35,10 +35,16 @@ type Params struct {
 	IgnoreDir string
 }
 
+func (p Params) String() string {
+	b, _ := json.Marshal(p)
+	return string(b)
+}
+
 // NewHook Инициализация logrus hook
 //
 //lint:ignore U1000 Эта функция используется другими пакетами
 func NewHook(params Params) (*Hook, error) {
+	fmt.Println(params)
 	logrus.SetReportCaller(true)
 	_client := NewClient(params.Address, &tls.Config{
 		InsecureSkipVerify: true,

@@ -87,7 +87,7 @@ func (c *Client) processQueue() {
 				break
 			}
 
-			fmt.Printf("Failed to connect to log server: %v, retrying in 5s...\n", err)
+			fmt.Printf("Failed to connect to log server: %s error: %v, retrying in 5s...\n", c.address, err)
 			time.Sleep(5 * time.Second)
 		}
 	}
