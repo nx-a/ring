@@ -99,7 +99,11 @@ func (h *Hook) Fire(entry *logrus.Entry) error {
 func (h *Hook) sendLog(entry *logrus.Entry) {
 	file := ""
 	if entry.Caller != nil {
-		file = fmt.Sprintf("%s:%d", entry.Caller.File, entry.Caller.Line)[len(h.ignoreDir):]
+		filename := entry.Caller.File
+		if len(entry.Caller.File) > len(h.ignoreDir) {
+			filename = filename[len(h.ignoreDir):]
+		}
+		file = fmt.Sprintf("%s:%d", filename, entry.Caller.Line)
 	}
 	// Сериализуем в JSON
 	data, err := json.Marshal(LogEntry{
