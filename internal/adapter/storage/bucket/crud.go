@@ -2,6 +2,7 @@ package bucket
 
 import (
 	"context"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nx-a/ring/internal/adapter/storage"
@@ -34,16 +35,16 @@ func (b *Bucket) Add(bucket domain.Bucket) domain.Bucket {
 	return bucket
 }
 func (b *Bucket) GetAll() []domain.Bucket {
-	rows, err := b.pool.Query(context.Background(), "select distinct system_name, time_life from bucket where time_life > 0")
+	rows, err := b.pool.Query(context.Background(), "select bucket_id, system_name, time_life from bucket where time_life > 0")
 	if err != nil {
 		log.Error("Failed to query bucket systems:", err)
 		return nil
 	}
 	defer rows.Close()
-	snames := make([]domain.Bucket, 0, len(rows.RawValues()))
+	snames := make([]domain.Bucket, 0, 8)
 	for rows.Next() {
 		var el domain.Bucket
-		if err := rows.Scan(&el.SystemName, &el.TimeLife); err != nil {
+		if err := rows.Scan(&el.BucketId, &el.SystemName, &el.TimeLife); err != nil {
 			log.Debug("Failed to scan system name:", err)
 			continue
 		}

@@ -5,11 +5,12 @@ import (
 )
 
 type Data struct {
-	DataId  string
-	Ext     string
-	PointId uint64
-	Bucket  string
-	Time    *time.Time
-	Level   string
-	Val     []byte
+	DataId   string
+	Ext      string
+	PointId  uint64
+	BucketId uint64
+	Bucket   string
+	Time     *time.Time
+	Level    string
+	Val      []byte
 }

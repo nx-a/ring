@@ -2,8 +2,9 @@ package event
 
 import (
 	"context"
-	log "github.com/sirupsen/logrus"
 	"sync/atomic"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Subscriber struct {

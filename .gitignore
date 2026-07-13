@@ -24,6 +24,7 @@ profile.cov
 go.work
 go.sum
 go.work.sum
+.*.yml
 
 # env file
 .env
@@ -36,3 +37,5 @@ docker_compose.yml
 /ring/
 app
 /cmd/web/tls/*
+web/node_modules
+web/*-lock.json

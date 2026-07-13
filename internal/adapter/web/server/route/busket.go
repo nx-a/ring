@@ -1,13 +1,14 @@
 package route
 
 import (
+	"net/http"
+
 	"github.com/nx-a/ring/internal/adapter/web/server"
 	"github.com/nx-a/ring/internal/adapter/web/server/route/dto"
 	_map "github.com/nx-a/ring/internal/adapter/web/server/route/map"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/engine/conv"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
 func Bucket(s *server.Server, service ports.BucketService) {
@@ -25,6 +26,9 @@ func Bucket(s *server.Server, service ports.BucketService) {
 		s.Write(w, controls)
 	})
 	s.Mux().HandleFunc("POST /bucket", func(w http.ResponseWriter, r *http.Request) {
+		if !s.RequireAdmin(w, r) {
+			return
+		}
 		control, ok := s.Control(r, w)
 		if !ok {
 			return
@@ -37,12 +41,47 @@ func Bucket(s *server.Server, service ports.BucketService) {
 		}
 		_bucket.ControlId = conv.ToUint(control["ControlId"])
 		if _bucket.TimeLife == 0 {
-			_bucket.TimeLife = 10 * 24 //10 дней
+			_bucket.TimeLife = 10 * 24 // 10 дней
 		}
 		_bucket = service.Add(_bucket)
 		s.Write(w, _bucket)
 	})
+	s.Mux().HandleFunc("PUT /bucket/{id}/retention", func(w http.ResponseWriter, r *http.Request) {
+		if !s.RequireAdmin(w, r) {
+			return
+		}
+		control, ok := s.Control(r, w)
+		if !ok {
+			return
+		}
+		id := conv.ParseValue[uint64](r, "id")
+		if id == 0 {
+			s.Error(w, http.StatusBadRequest, map[string]any{"error": "id not found"})
+			return
+		}
+		dto := conv.Parse[dto.Bucket](w, r)
+		if dto == nil {
+			return
+		}
+		buckets, err := service.GetByControl(conv.ToUint(control["ControlId"]))
+		if err != nil {
+			s.Error(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		for _, b := range buckets {
+			if b.BucketId == id {
+				b.TimeLife = dto.TimeLife
+				updated := service.Update(id, b)
+				s.Write(w, updated)
+				return
+			}
+		}
+		s.Error(w, http.StatusNotFound, map[string]any{"error": "bucket not found"})
+	})
 	s.Mux().HandleFunc("DELETE /bucket/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !s.RequireAdmin(w, r) {
+			return
+		}
 		control, ok := s.Control(r, w)
 		if !ok {
 			return

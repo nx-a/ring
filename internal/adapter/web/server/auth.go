@@ -1,11 +1,12 @@
 package server
 
 import (
-	"context"
-	"github.com/nx-a/ring/internal/core/ports"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strings"
+
+	"github.com/nx-a/ring/internal/core/ports"
+	ctx "github.com/nx-a/ring/internal/engine/context"
+	"github.com/nx-a/ring/internal/engine/logger"
 )
 
 var wl = map[string]bool{
@@ -20,8 +21,10 @@ func auth(next http.Handler, tokenService ports.TokenService) http.Handler {
 		}
 		var token string
 		if token = r.Header.Get("Authorization"); token == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
+			token = r.URL.Query().Get("token")
+		}
+		if token == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		token = strings.TrimPrefix(token, "Bearer ")
@@ -30,12 +33,12 @@ func auth(next http.Handler, tokenService ports.TokenService) http.Handler {
 			claim, err = tokenService.GetByToken(token)
 		}
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("Unauthorized"))
+			logger.FromContext(r.Context()).WithError(err).Warn("auth failed")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		log.Info(claim)
-		r = r.WithContext(context.WithValue(context.Background(), "control", claim))
+		logger.FromContext(r.Context()).WithField("claim", claim).Info("auth success")
+		r = r.WithContext(ctx.WithControl(r.Context(), claim))
 		next.ServeHTTP(w, r)
 	})
 }

@@ -4,11 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/nx-a/ring/internal/core/ports"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/nx-a/ring/internal/core/ports"
+	log "github.com/sirupsen/logrus"
 )
 
 type Server struct {
@@ -17,6 +18,7 @@ type Server struct {
 	mutex        sync.RWMutex
 	wg           sync.WaitGroup
 	shutdown     chan struct{}
+	shutdownOnce sync.Once
 	dataService  ports.DataService
 	tokenService ports.TokenService
 }
@@ -44,9 +46,8 @@ func (s *Server) RemoveClient(client *Client) {
 	delete(s.clients, client)
 }
 func (s *Server) CloseAllClients() {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	for client := range s.clients {
 		client.Close()
 	}
@@ -112,9 +113,10 @@ func (s *Server) Run(ctx context.Context) {
 	}
 }
 func (s *Server) Close() error {
-	close(s.shutdown)
-	// Даем время на завершение активных соединений
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	s.shutdownOnce.Do(func() {
+		close(s.shutdown)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	go func() {
@@ -124,14 +126,20 @@ func (s *Server) Close() error {
 
 	<-ctx.Done()
 	s.CloseAllClients()
-	s.listener.Close()
-	return nil
+	return s.listener.Close()
 }
 
 func (s *Server) AddHandler(dataService ports.DataService, tokenService ports.TokenService) {
 	s.dataService = dataService
 	s.tokenService = tokenService
 }
+
+func (s *Server) ClientsCount() int {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return len(s.clients)
+}
+
 func isClosedError(err error) bool {
 	return err.Error() == "use of closed network connection"
 }

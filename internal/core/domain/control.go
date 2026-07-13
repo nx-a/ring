@@ -6,6 +6,7 @@ type Control struct {
 	ControlId uint64
 	Login     string
 	Password  string
+	Role      string
 	Buckets   []Bucket
 }
 

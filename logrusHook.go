@@ -4,10 +4,11 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type Hook struct {
@@ -36,7 +37,10 @@ type Params struct {
 }
 
 func (p Params) String() string {
-	b, _ := json.Marshal(p)
+	b, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Sprintf("{error: %v}", err)
+	}
 	return string(b)
 }
 
@@ -50,8 +54,8 @@ func NewHook(params Params) (*Hook, error) {
 		InsecureSkipVerify: true,
 	})
 
-	hostname, _ := os.Hostname()
-	if hostname == "" {
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
 		hostname = "unknown"
 	}
 	if params.IgnoreDir == "" {

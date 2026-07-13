@@ -2,8 +2,10 @@ package bucket
 
 import (
 	"context"
+
 	"github.com/nx-a/ring/internal/core/domain"
 	"github.com/nx-a/ring/internal/core/ports"
+	ctx "github.com/nx-a/ring/internal/engine/context"
 	"github.com/nx-a/ring/internal/engine/event"
 )
 
@@ -29,12 +31,15 @@ func (b *Service) GetByControl(id uint64) ([]domain.Bucket, error) {
 
 func (b *Service) Add(bucket *domain.Bucket) *domain.Bucket {
 	_b := b.stor.Add(*bucket)
-	b.event.Publish("bucket", context.WithValue(context.Background(), "sysname", _b.SystemName))
+	b.event.Publish("bucket", ctx.WithBucketID(context.Background(), _b.BucketId))
 	return &_b
 }
 
 func (b *Service) Remove(id uint64) {
 	b.stor.Remove(id)
+}
+func (b *Service) Update(id uint64, bucket domain.Bucket) domain.Bucket {
+	return b.stor.Update(id, bucket)
 }
 func (b *Service) GetAll() []domain.Bucket {
 	return b.stor.GetAll()

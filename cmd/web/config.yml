@@ -6,3 +6,8 @@ service:
   prod: ${PROD:false}
 database:
   dsn: ${DATABASE_DSN:postgres://postgres:p0proxima@postgres:5432/ring?sslmode=disable&application_name=ring}
+  maxConns: ${DATABASE_MAX_CONNS:25}
+  minConns: ${DATABASE_MIN_CONNS:5}
+  maxConnLifetimeSec: ${DATABASE_MAX_CONN_LIFETIME_SEC:3600}
+  maxConnIdleTimeSec: ${DATABASE_MAX_CONN_IDLE_TIME_SEC:600}
+  healthCheckPeriodSec: ${DATABASE_HEALTH_CHECK_PERIOD_SEC:60}

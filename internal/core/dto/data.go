@@ -19,4 +19,7 @@ type DataSelect struct {
 	Level     []string   `json:"level"`
 	Data      []string   `json:"data"`
 	Bucket    string     `json:"bucket"`
+	BucketId  uint64     `json:"bucketId"`
+	Limit     int        `json:"limit"`
+	Offset    int        `json:"offset"`
 }

@@ -4,21 +4,32 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"time"
+
 	"github.com/nx-a/ring/internal/core/domain"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/core/service/bucket"
+	"github.com/nx-a/ring/internal/engine/cache"
 )
 
 type Token struct {
 	stor          ports.TokenStorage
 	bucketService *bucket.Service
+	cache         *cache.TTL[string, map[string]any]
 }
 
 func New(stor ports.TokenStorage, bucketService *bucket.Service) *Token {
-	return &Token{stor: stor, bucketService: bucketService}
+	return &Token{
+		stor:          stor,
+		bucketService: bucketService,
+		cache:         cache.NewTTL[string, map[string]any](5*time.Minute, 10*time.Minute),
+	}
 }
 
 func (t *Token) GetByToken(token string) (map[string]any, error) {
+	if cached, ok := t.cache.Get(token); ok {
+		return cached, nil
+	}
 	d, e := t.stor.GetByToken(token)
 	if e != nil {
 		return nil, e
@@ -27,14 +38,17 @@ func (t *Token) GetByToken(token string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp := make(map[string]any, 5)
-	resp["tokenId"] = d.TokenId
-	resp["bucketId"] = d.BucketId
-	resp["bucket"] = _backet.SystemName
-	resp["type"] = d.Type
-	resp["token"] = d.Val
+	resp := map[string]any{
+		"tokenId":  d.TokenId,
+		"bucketId": d.BucketId,
+		"bucket":   _backet.SystemName,
+		"type":     d.Type,
+		"token":    d.Val,
+	}
+	t.cache.Set(token, resp)
 	return resp, nil
 }
+
 func (t *Token) Add(controlId uint64, token domain.Token) domain.Token {
 	buckets, err := t.bucketService.GetByControl(controlId)
 	if err != nil {
@@ -54,9 +68,11 @@ func (t *Token) Add(controlId uint64, token domain.Token) domain.Token {
 	if err != nil {
 		return token
 	}
-	return t.stor.Add(token)
+	created := t.stor.Add(token)
+	return created
 }
-func (t *Token) GetByBucketId(controlId uint64, bucketId uint64) []domain.Token {
+
+func (t *Token) GetByBucketId(controlId, bucketId uint64) []domain.Token {
 	buckets, err := t.bucketService.GetByControl(controlId)
 	if err != nil {
 		return nil
@@ -73,7 +89,8 @@ func (t *Token) GetByBucketId(controlId uint64, bucketId uint64) []domain.Token 
 	}
 	return t.stor.GetByBucketId(bucketId)
 }
-func (t *Token) Remove(controlId uint64, id uint64) {
+
+func (t *Token) Remove(controlId, id uint64) {
 	_token, err := t.stor.GetById(id)
 	if err != nil {
 		return
@@ -84,11 +101,13 @@ func (t *Token) Remove(controlId uint64, id uint64) {
 	}
 	for _, _bucket := range buckets {
 		if _bucket.BucketId == _token.BucketId {
+			t.cache.Delete(_token.Val)
 			t.stor.Remove(id)
 			break
 		}
 	}
 }
+
 func generateRandomToken(length int) (string, error) {
 	b := make([]byte, length)
 

@@ -3,15 +3,16 @@ package env
 import (
 	"embed"
 	"fmt"
-	"github.com/nx-a/ring/internal/engine/conv"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
 	"os"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/nx-a/ring/internal/engine/conv"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 type Environment struct {
@@ -46,11 +47,6 @@ var def = `server:
 service:
   name: ${SERVICE_NAME:app}
   prod: ${PROD:false}`
-
-type Env struct {
-	mutex sync.RWMutex
-	data  map[string]interface{}
-}
 
 func GetInterface(env *Environment, name string) interface{} {
 	subName := strings.Split(name, ".")
@@ -94,7 +90,7 @@ func checkEnv(value string) string {
 		find := isEnv.FindStringSubmatch(value)
 		sub := strings.SplitN(find[1], ":", 2)
 		envOs := os.Getenv(sub[0])
-		if len(envOs) > 0 {
+		if envOs != "" {
 			return envOs
 		}
 		if len(sub) > 1 {
@@ -138,13 +134,13 @@ func Convert[T any](env *Environment, name string) T {
 			val = reflect.ValueOf(false)
 		}
 	case reflect.Float32:
-		f, e := strconv.ParseFloat(strings.Replace(contentStr, ",", ".", -1), 64)
+		f, e := strconv.ParseFloat(strings.ReplaceAll(contentStr, ",", "."), 64)
 		if e != nil {
 			return t
 		}
 		val = reflect.ValueOf(f)
 	case reflect.Float64:
-		f, e := strconv.ParseFloat(strings.Replace(contentStr, ",", ".", -1), 64)
+		f, e := strconv.ParseFloat(strings.ReplaceAll(contentStr, ",", "."), 64)
 		if e != nil {
 			return t
 		}

@@ -5,6 +5,13 @@ import (
 	"crypto/tls"
 	"embed"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"syscall"
+	"time"
+
 	"github.com/nx-a/ring/cmd/migrate"
 	"github.com/nx-a/ring/internal/adapter/storage"
 	bucketstor "github.com/nx-a/ring/internal/adapter/storage/bucket"
@@ -19,15 +26,12 @@ import (
 	"github.com/nx-a/ring/internal/core/service/control"
 	"github.com/nx-a/ring/internal/core/service/data"
 	"github.com/nx-a/ring/internal/core/service/point"
+	"github.com/nx-a/ring/internal/core/service/status"
 	"github.com/nx-a/ring/internal/core/service/token"
 	"github.com/nx-a/ring/internal/engine"
 	"github.com/nx-a/ring/internal/engine/env"
 	"github.com/nx-a/ring/internal/engine/event"
 	log "github.com/sirupsen/logrus"
-	"os"
-	"os/signal"
-	"runtime"
-	"syscall"
 )
 
 //go:embed config.yml
@@ -56,9 +60,18 @@ func main() {
 	}
 }
 
-var ignoreDir = "/home/nx/project/go/ring/"
+var ignoreDir = func() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	if wd[len(wd)-1] != filepath.Separator {
+		wd += string(filepath.Separator)
+	}
+	return wd
+}()
 
-func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
+func dependency() (ws *server.Server, srv *tcp.Server, closes []engine.Closable) {
 	_event := event.New()
 	cfg := env.New(config)
 	log.SetLevel(log.DebugLevel)
@@ -68,8 +81,10 @@ func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
 		EnvironmentOverrideColors: true,
 		FullTimestamp:             true,
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-			filename := f.File[len(ignoreDir):]
-
+			filename := f.File
+			if ignoreDir != "" && len(filename) > len(ignoreDir) {
+				filename = filename[len(ignoreDir):]
+			}
 			return "", fmt.Sprintf(" %s:%d", filename, f.Line)
 		},
 	})
@@ -88,7 +103,7 @@ func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
 	pointStor := pointstor.New(db.Get())
 	tokenStor := tokenstor.New(db.Get())
 
-	//core
+	// core
 	bucketService := bucket.New(backetStor, _event)
 	controlStor := controlstor.New(db.Get(), bucketService)
 	pointService := point.New(pointStor, bucketService)
@@ -96,7 +111,7 @@ func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
 	tokenService := token.New(tokenStor, bucketService)
 	controlService := control.New(controlStor)
 
-	ws := server.New(cfg, &server.Services{
+	ws = server.New(cfg, &server.Services{
 		TokenService:  tokenService,
 		BucketService: bucketService,
 		DataService:   dataService,
@@ -107,16 +122,20 @@ func dependency() (*server.Server, *tcp.Server, []engine.Closable) {
 	route.Point(ws, pointService)
 	route.Token(ws, tokenService)
 	route.Data(ws, dataService)
+	route.Stream(ws, dataService)
 	tlsConfig, err := loadTLSConfigFromFiles("tls/server.crt", "tls/server.key")
 	if err != nil {
 		log.Fatalf("Failed to load TLS files: %v", err)
 	}
-	srv, err := tcp.NewServer(":7888", tlsConfig)
+	srv, err = tcp.NewServer(":7888", tlsConfig)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 	srv.AddHandler(dataService, tokenService)
-	return ws, srv, []engine.Closable{db, ws, srv}
+	statusService := status.New(db.Get(), dataService, srv, time.Now().Unix())
+	route.Status(ws, statusService)
+	closes = []engine.Closable{db, ws, srv, dataService}
+	return
 }
 func loadTLSConfigFromFiles(certFile, keyFile string) (*tls.Config, error) {
 	certData, err := tlsDir.ReadFile(certFile)

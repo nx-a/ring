@@ -1,7 +1,8 @@
-package backet
+package point
 
 import (
 	"context"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nx-a/ring/internal/adapter/storage"
@@ -62,26 +63,22 @@ func (b *Point) GetByBacketId(id uint64) []domain.Point {
 		err := rows.Scan(&point.PointId, &point.BucketId, &point.ExternalId, &point.TimeZone)
 		if err != nil {
 			log.Error(err)
+			continue
 		}
+		points = append(points, point)
 	}
 	return points
 }
 func (b *Point) GetByExternalId(ids []uint64, ext string) *domain.Point {
-	rows, err := b.pool.Query(context.Background(), "select point_id, bucket_id, external_id, time_zone from point where bucket_id =ANY($1) and external_id = $2", ids, ext)
+	var point domain.Point
+	err := b.pool.QueryRow(context.Background(), "select point_id, bucket_id, external_id, time_zone from point where bucket_id =ANY($1) and external_id = $2 limit 1", ids, ext).Scan(
+		&point.PointId, &point.BucketId, &point.ExternalId, &point.TimeZone,
+	)
 	if err != nil {
 		log.Error(err)
 		return nil
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var point domain.Point
-		err := rows.Scan(&point.PointId, &point.BucketId, &point.ExternalId, &point.TimeZone)
-		if err != nil {
-			log.Error(err)
-		}
-		return &point
-	}
-	return nil
+	return &point
 }
 func (b *Point) GetByExternalIds(bucketId uint64, ext []string) []domain.Point {
 	rows, err := b.pool.Query(context.Background(), "select point_id, bucket_id, external_id, time_zone from point where bucket_id = $1 and external_id =any($2)", bucketId, ext)

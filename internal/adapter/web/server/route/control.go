@@ -2,17 +2,18 @@ package route
 
 import (
 	"encoding/json"
-	"github.com/fatih/structs"
+	"net/http"
+
 	"github.com/nx-a/ring/internal/adapter/web/server"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/engine/conv"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
 type Auth struct {
-	Login    string
-	Password string
+	Login    string `json:"login"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
 }
 
 func Control(s *server.Server, service ports.ControlService) {
@@ -23,22 +24,30 @@ func Control(s *server.Server, service ports.ControlService) {
 		}
 		_control, err := service.LogIn(auth.Login, auth.Password)
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(err.Error()))
+			s.Error(w, http.StatusUnauthorized, map[string]any{"error": err.Error()})
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		token, err := server.NewJwt(structs.Map(_control))
+		token, err := server.NewJwt(map[string]any{
+			"ControlId": _control.ControlId,
+			"Login":     _control.Login,
+			"Role":      _control.Role,
+			"Buckets":   _control.Buckets,
+		})
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(err.Error()))
+			s.Error(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		}
-		jsonData, _ := json.Marshal(map[string]any{
+		jsonData, err := json.Marshal(map[string]any{
 			"token":  token,
 			"status": "ok",
 		})
-		w.Write(jsonData)
+		if err != nil {
+			s.Error(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(jsonData)
 	})
 	s.Mux().HandleFunc("POST /auth/reg", func(w http.ResponseWriter, r *http.Request) {
 		auth := conv.Parse[Auth](w, r)
@@ -46,25 +55,33 @@ func Control(s *server.Server, service ports.ControlService) {
 			return
 		}
 		log.Info(auth)
-		_control, err := service.Reg(auth.Login, auth.Password)
+		_control, err := service.Reg(auth.Login, auth.Password, auth.Role)
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(err.Error()))
+			s.Error(w, http.StatusUnauthorized, map[string]any{"error": err.Error()})
 			return
 		}
 		log.Info(_control)
-		w.WriteHeader(http.StatusOK)
-		token, err := server.NewJwt(structs.Map(_control))
+		token, err := server.NewJwt(map[string]any{
+			"ControlId": _control.ControlId,
+			"Login":     _control.Login,
+			"Role":      _control.Role,
+			"Buckets":   _control.Buckets,
+		})
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(err.Error()))
+			s.Error(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		}
-		jsonData, _ := json.Marshal(map[string]any{
+		jsonData, err := json.Marshal(map[string]any{
 			"token":  token,
 			"status": "ok",
 		})
-		w.Write(jsonData)
+		if err != nil {
+			s.Error(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(jsonData)
 	})
 
 }

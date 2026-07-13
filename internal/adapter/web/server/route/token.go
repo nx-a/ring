@@ -1,17 +1,21 @@
 package route
 
 import (
+	"net/http"
+
 	"github.com/nx-a/ring/internal/adapter/web/server"
 	"github.com/nx-a/ring/internal/adapter/web/server/route/dto"
 	_map "github.com/nx-a/ring/internal/adapter/web/server/route/map"
 	"github.com/nx-a/ring/internal/core/ports"
 	"github.com/nx-a/ring/internal/engine/conv"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
 func Token(s *server.Server, ts ports.TokenService) {
 	s.Mux().HandleFunc("DELETE /token/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !s.RequireAdmin(w, r) {
+			return
+		}
 		control, ok := s.Control(r, w)
 		if !ok {
 			return
@@ -24,6 +28,9 @@ func Token(s *server.Server, ts ports.TokenService) {
 		ts.Remove(conv.ToUint(control["ControlId"]), id)
 	})
 	s.Mux().HandleFunc("POST /token", func(w http.ResponseWriter, r *http.Request) {
+		if !s.RequireAdmin(w, r) {
+			return
+		}
 		control, ok := s.Control(r, w)
 		if !ok {
 			return
