@@ -1,13 +1,21 @@
 package ring
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"sync"
 	"time"
+)
+
+const (
+	batchSize         = 100
+	flushInterval     = 100 * time.Millisecond
+	reconnectInterval = 5 * time.Second
 )
 
 type Client struct {
@@ -17,15 +25,61 @@ type Client struct {
 	done    chan struct{}
 	config  *tls.Config
 	wg      sync.WaitGroup
+	cache   *logCache
 }
 
-func NewClient(address string, config *tls.Config) *Client {
+type clientOptions struct {
+	cacheDir     string
+	maxMemCache  int64
+	maxFileCache int64
+}
+
+// Option настраивает параметры клиента.
+type Option func(*clientOptions)
+
+// WithCacheDir задаёт директорию для файлового кеша логов
+// (по умолчанию os.TempDir()/ring-log-cache).
+func WithCacheDir(dir string) Option {
+	return func(o *clientOptions) {
+		o.cacheDir = dir
+	}
+}
+
+// WithMaxMemoryCache задаёт лимит кеша логов в памяти в байтах
+// (по умолчанию 20 Мб).
+func WithMaxMemoryCache(bytes int64) Option {
+	return func(o *clientOptions) {
+		o.maxMemCache = bytes
+	}
+}
+
+// WithMaxFileCache задаёт лимит файлового кеша логов в байтах
+// (по умолчанию 50 Мб).
+func WithMaxFileCache(bytes int64) Option {
+	return func(o *clientOptions) {
+		o.maxFileCache = bytes
+	}
+}
+
+func NewClient(address string, config *tls.Config, opts ...Option) *Client {
+	options := clientOptions{
+		maxMemCache:  DefaultMaxMemoryCache,
+		maxFileCache: DefaultMaxFileCache,
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	cache, err := newLogCache(options.cacheDir, options.maxMemCache, options.maxFileCache, address)
+	if err != nil {
+		fmt.Printf("Log cache disabled: %v\n", err)
+	}
 	return &Client{
 		address: address,
 		config:  config,
 		timeout: 5 * time.Second,
 		queue:   make(chan []byte, 1000),
 		done:    make(chan struct{}),
+		cache:   cache,
 	}
 }
 
@@ -51,73 +105,155 @@ func (c *Client) Send(data []byte) error {
 	}
 }
 
+// CacheStats возвращает текущее состояние кеша неотправленных логов.
+func (c *Client) CacheStats() CacheStats {
+	if c.cache == nil {
+		return CacheStats{}
+	}
+	return c.cache.stats()
+}
+
 func (c *Client) processQueue() {
 	defer c.wg.Done()
 	var conn *tls.Conn
+	var reader *bufio.Reader
 
-	reconnect := func() {
+	closeConn := func() {
 		if conn != nil {
 			_ = conn.Close()
 			conn = nil
 		}
-		for {
-			select {
-			case <-c.done:
-				return
-			default:
-			}
-			var err error
-			conn, err = tls.Dial("tcp", c.address, c.config)
-			if err == nil {
-				fmt.Printf("Connected to log server %s\n", c.address)
-				return
-			}
-			fmt.Printf("Failed to connect to log server: %s error: %v, retrying in 5s...\n", c.address, err)
-			select {
-			case <-c.done:
-				return
-			case <-time.After(5 * time.Second):
-			}
+		reader = nil
+		if c.cache != nil {
+			c.cache.closeReplay()
 		}
 	}
-	reconnect()
 
-	batch := make([][]byte, 0, 100)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	flush := func() {
-		if len(batch) == 0 || conn == nil {
+	tryConnect := func() {
+		if conn != nil {
 			return
 		}
-		data := buildBatch(batch)
-		if err := c.sendRaw(conn, data); err != nil {
+		dialer := &net.Dialer{Timeout: c.timeout}
+		nc, err := tls.DialWithDialer(dialer, "tcp", c.address, c.config)
+		if err != nil {
+			return
+		}
+		conn = nc
+		reader = bufio.NewReaderSize(conn, 64*1024)
+		fmt.Printf("Connected to log server %s\n", c.address)
+	}
+
+	tryConnect()
+	if conn == nil {
+		fmt.Printf("Log server %s is unavailable, logs will be cached\n", c.address)
+	}
+
+	batch := make([][]byte, 0, batchSize)
+	flushTicker := time.NewTicker(flushInterval)
+	defer flushTicker.Stop()
+	reconnectTicker := time.NewTicker(reconnectInterval)
+	defer reconnectTicker.Stop()
+
+	cacheEntries := func(entries ...[]byte) {
+		if c.cache == nil {
+			return
+		}
+		for _, e := range entries {
+			c.cache.add(e)
+		}
+	}
+
+	// sendBatch отправляет пачку и ждёт подтверждение ("done") от сервера.
+	// Без подтверждения пачка считается недоставленной, а соединение
+	// закрывается для переподключения.
+	sendBatch := func(entries [][]byte) bool {
+		if conn == nil || len(entries) == 0 {
+			return false
+		}
+		if err := c.sendRaw(conn, buildBatch(entries)); err != nil {
 			fmt.Printf("Failed to send batch: %v, reconnecting...\n", err)
-			reconnect()
-			if conn != nil {
-				if err2 := c.sendRaw(conn, data); err2 != nil {
-					fmt.Printf("Failed to send batch after reconnect: %v\n", err2)
-				}
+			closeConn()
+			return false
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
+			closeConn()
+			return false
+		}
+		ack, err := reader.ReadString('\n')
+		if err != nil || ack != "done\n" {
+			if err != nil {
+				fmt.Printf("Failed to receive ack: %v, reconnecting...\n", err)
 			}
+			closeConn()
+			return false
+		}
+		return true
+	}
+
+	// flushFresh отправляет накопленную свежую пачку,
+	// при отсутствии связи или ошибке — кеширует её.
+	flushFresh := func() {
+		if len(batch) == 0 {
+			return
+		}
+		if !sendBatch(batch) {
+			cacheEntries(batch...)
 		}
 		batch = batch[:0]
+	}
+
+	// replayCache отправляет одну пачку из кеша. Отправка идёт по тику,
+	// пачками, чтобы не перегружать сервер после восстановления связи.
+	replayCache := func() {
+		if c.cache == nil || !c.cache.hasPending() {
+			return
+		}
+		entries := c.cache.nextBatch(batchSize)
+		if len(entries) == 0 {
+			return
+		}
+		if !sendBatch(entries) {
+			c.cache.restore(entries)
+		}
 	}
 
 	for {
 		select {
 		case <-c.done:
-			flush()
-			if conn != nil {
-				_ = conn.Close()
+			flushFresh()
+			// дочитываем остаток очереди в кеш и сбрасываем кеш в файл,
+			// чтобы логи не пропали при следующем запуске
+			for {
+				select {
+				case data := <-c.queue:
+					cacheEntries(data)
+				default:
+					if c.cache != nil {
+						c.cache.flushAll()
+					}
+					closeConn()
+					return
+				}
 			}
-			return
 		case data := <-c.queue:
-			batch = append(batch, data)
-			if len(batch) >= 100 {
-				flush()
+			if conn == nil {
+				cacheEntries(data)
+				continue
 			}
-		case <-ticker.C:
-			flush()
+			batch = append(batch, data)
+			if len(batch) >= batchSize {
+				flushFresh()
+			}
+		case <-flushTicker.C:
+			if conn == nil {
+				continue
+			}
+			flushFresh()
+			replayCache()
+		case <-reconnectTicker.C:
+			if conn == nil {
+				tryConnect()
+			}
 		}
 	}
 }

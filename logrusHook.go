@@ -34,6 +34,13 @@ type Params struct {
 	Token     string
 	AppName   string
 	IgnoreDir string
+	// CacheDir — директория файлового кеша логов на случай отсутствия
+	// связи с сервером (по умолчанию os.TempDir()/ring-log-cache)
+	CacheDir string
+	// MaxMemoryCache — лимит кеша логов в памяти в байтах (по умолчанию 20 Мб)
+	MaxMemoryCache int64
+	// MaxFileCache — лимит файлового кеша логов в байтах (по умолчанию 50 Мб)
+	MaxFileCache int64
 }
 
 func (p Params) String() string {
@@ -47,12 +54,23 @@ func (p Params) String() string {
 // NewHook Инициализация logrus hook
 //
 //lint:ignore U1000 Эта функция используется другими пакетами
+//nolint:gocritic // Params передаётся по значению для обратной совместимости API
 func NewHook(params Params) (*Hook, error) {
 	fmt.Println(params)
 	logrus.SetReportCaller(true)
+	var opts []Option
+	if params.CacheDir != "" {
+		opts = append(opts, WithCacheDir(params.CacheDir))
+	}
+	if params.MaxMemoryCache > 0 {
+		opts = append(opts, WithMaxMemoryCache(params.MaxMemoryCache))
+	}
+	if params.MaxFileCache > 0 {
+		opts = append(opts, WithMaxFileCache(params.MaxFileCache))
+	}
 	_client := NewClient(params.Address, &tls.Config{
 		InsecureSkipVerify: true,
-	})
+	}, opts...)
 
 	hostname, err := os.Hostname()
 	if err != nil || hostname == "" {
@@ -117,7 +135,7 @@ func (h *Hook) sendLog(entry *logrus.Entry) {
 	}
 	// Сериализуем в JSON
 	data, err := json.Marshal(LogEntry{
-		Timestamp: entry.Time.Format(time.RFC3339),
+		Timestamp: entry.Time.Format(time.RFC3339Nano),
 		Level:     entry.Level.String(),
 		Message:   entry.Message,
 		File:      file,

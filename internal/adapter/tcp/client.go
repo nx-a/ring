@@ -131,7 +131,9 @@ func (c *Client) writeEntry(entry *ring.LogEntry) {
 		log.WithError(err).Warnf("Client %s: get token failed", c.conn.RemoteAddr())
 		return
 	}
-	_time, err := time.Parse(time.RFC3339, entry.Timestamp)
+	// Сохраняем дату, указанную в логе (с точностью до наносекунд);
+	// при некорректной дате используем текущее время.
+	_time, err := time.Parse(time.RFC3339Nano, entry.Timestamp)
 	if err != nil {
 		_time = time.Now()
 	}
